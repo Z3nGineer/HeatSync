@@ -1,0 +1,113 @@
+# Byte-compiled / optimized / packaging
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+*.dylib
+*.dll
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.whl
+*.egg
+
+# PyInstaller
+# (keep the spec if you track build config; ignoring build outputs only)
+dist/
+build/
+
+# AppImage / packaged outputs
+AppDir/
+*.AppImage
+aur/pkg/
+aur/*.pkg.tar.zst
+
+# Installer and build artifacts
+build/HeatSync/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env
+.env.*
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tests / coverage
+.pytest_cache/
+coverage.xml
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Secrets and keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+*.pw
+*.credentials
+secrets.*
+secrets.yml
+credentials
+id_rsa
+id_rsa.pub
+
+# Cloud / infra
+.aws/
+.azure/
+.terraform/
+.terraform.lock.hcl
+
+# Python packaging caches
+__pypackages__/
+*.egg-info/
+
+# Temporary and backup files
+*.tmp
+*.temp
+*~
+*.bak
+*.swp
+
+# Misc
+*.exe
+*.msi
+*.msix
+*.cab
+
+# Archives and releases
+releases/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tbz2
+*.7z
+*.rar
+*.xz
+*.zst
+
+# Keep source directories (src/, assets/, tests/) tracked — don't ignore them here
