@@ -1,0 +1,41 @@
+[MASTER]
+ignore=tests
+jobs=1
+
+[MESSAGES CONTROL]
+disable=
+    missing-docstring,
+    invalid-name,
+    too-few-public-methods,
+    too-many-arguments
+
+[REPORTS]
+output-format=colorized
+reports=no
+score=yes
+
+[BASIC]
+good-names=i,j,k,ex,Run,_
+
+[FORMAT]
+max-line-length=100
+indent-string='    '
+
+[DESIGN]
+max-args=5
+max-locals=15
+max-returns=6
+max-branches=12
+max-statements=50
+max-parents=7
+max-attributes=10
+min-public-methods=0
+
+[TYPECHECK]
+ignored-modules=
+
+[LOGGING]
+logging-modules=logging
+
+[SIMILARITIES]
+min-similarity-lines=4
