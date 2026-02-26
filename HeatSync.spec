@@ -5,7 +5,7 @@ a = Analysis(
     ['HeatSync.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets'), ('VERSION', '.')],
+    datas=[('assets', 'assets'), ('VERSION', '.'), ('heatsync', 'heatsync')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
