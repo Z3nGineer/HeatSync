@@ -30,5 +30,13 @@ Thumbs.db
 *.swp
 *~
 
+# Build artifacts
+AppDir/usr/bin/
+releases/
+
+# Claude Code settings
+.claude/
+
 # Logs
 *.log
+.aider*

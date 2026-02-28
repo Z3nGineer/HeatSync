@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=HeatSync
+Exec=HeatSync
+Icon=heatsync
+Categories=System;Monitor;
+Terminal=false

@@ -44,8 +44,15 @@ _DEFAULT_SETTINGS: dict = {
         "cpu_temp":  95,
         "gpu_temp":  88,
         "cpu_usage": 90,
-        "gpu_usage": 90,
+        "gpu_usage": 100,  # effectively off — GPU usage at 100% is normal
     },
+    "alerts_enabled": {
+        "cpu_temp":  True,
+        "gpu_temp":  True,
+        "cpu_usage": False,  # off — high CPU usage is normal during gaming/compile/AI
+        "gpu_usage": False,  # off — high GPU usage is normal during gaming/AI
+    },
+    "locked_to_top": False,
 }
 
 _GEOMETRY_KEYS = frozenset({

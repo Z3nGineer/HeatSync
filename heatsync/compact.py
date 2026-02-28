@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush
 
+from .constants import IS_WAYLAND
 from .theme import _THEME, _font
 
 
@@ -22,6 +23,9 @@ class CompactBar(QWidget):
         self._on_normal_mode  = on_normal_mode
         self._on_settings     = on_settings
         self._last_press_ms   = 0.0
+        self._drag_start      = None
+        self._drag_win_start  = None
+        self._drag_live        = False   # True once movement threshold exceeded
         self.setFixedHeight(46)
         self.setCursor(Qt.CursorShape.SizeAllCursor)
         self.setMinimumWidth(600)
@@ -91,6 +95,11 @@ class CompactBar(QWidget):
         self._tick_clock()
         self._apply_theme_styles()
 
+        # Let mouse events fall through child labels/frames to CompactBar
+        # so drag and double-click-to-dock work regardless of where you click.
+        for child in self.findChildren(QWidget):
+            child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
     @staticmethod
     def _temp_color(temp: float, temp_hi: float) -> str:
         """Same white→red heat gradient as ArcGauge temp mode."""
@@ -130,18 +139,59 @@ class CompactBar(QWidget):
         self._val_lbs[1].setText(f"↑{net_up:.1f}  ↓{net_down:.1f} Mb/s")
         self._val_lbs[2].setText(f"{disk_used:.0f}/{disk_tot:.0f} GB")
 
+    def _clear_drag(self):
+        self._drag_start     = None
+        self._drag_win_start = None
+        self._drag_live      = False
+
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             now = time.monotonic() * 1000
             dt, self._last_press_ms = now - self._last_press_ms, now
             if dt > QApplication.doubleClickInterval():
-                h = self.window().windowHandle()
-                if h: h.startSystemMove()
+                # Record start position — actual drag begins in mouseMoveEvent
+                # so double-click detection still fires before any drag activates.
+                self._drag_start     = e.globalPosition().toPoint()
+                self._drag_win_start = self.window().pos()
+                self._drag_live      = False
+            else:
+                self._clear_drag()
         super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        win = self.window()
+        if self._drag_start is not None and (e.buttons() & Qt.MouseButton.LeftButton):
+            # Locked — no drag allowed
+            if getattr(win, '_locked_to_top', False):
+                self._clear_drag()
+                return
+            delta = e.globalPosition().toPoint() - self._drag_start
+            if not self._drag_live:
+                if delta.x() ** 2 + delta.y() ** 2 < 25:
+                    return
+                self._drag_live = True
+                # If docked, undock first so the bar shrinks back to compact
+                # width before the user starts dragging it around.
+                if win._docked:
+                    win.toggle_dock(via_drag=True)
+                if IS_WAYLAND:
+                    h = win.windowHandle()
+                    if h:
+                        h.startSystemMove()
+                    return
+            if not IS_WAYLAND:
+                win.move(self._drag_win_start + delta)
+        super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._clear_drag()
+        super().mouseReleaseEvent(e)
 
     def mouseDoubleClickEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             self._last_press_ms = 0.0
+            self._clear_drag()
             self.window().toggle_dock()
         super().mouseDoubleClickEvent(e)
 
@@ -162,7 +212,13 @@ class CompactBar(QWidget):
         menu.setStyleSheet(
             f"QMenu{{background:{bg};color:{fg};border:1px solid {bd};}}"
             f"QMenu::item:selected{{background:{bd};}}")
-        menu.addAction("Dock to Top",  self.window().toggle_dock)
+        win = self.window()
+        menu.addAction("Dock to Top", win.toggle_dock)
+        if win._docked:
+            lock_act = menu.addAction("Lock to Top")
+            lock_act.setCheckable(True)
+            lock_act.setChecked(getattr(win, '_locked_to_top', False))
+            lock_act.triggered.connect(win._toggle_lock_top)
         if self._on_normal_mode:
             menu.addAction("Normal Mode", self._on_normal_mode)
         if self._on_settings:

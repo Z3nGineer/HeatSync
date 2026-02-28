@@ -13,15 +13,13 @@ from PyQt6.QtWidgets import (
     QWidget, QDialog, QDialogButtonBox, QTabWidget, QGroupBox,
     QRadioButton, QCheckBox, QComboBox, QLineEdit, QSpinBox,
     QScrollArea, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QApplication,
-    QFileDialog, QFrame,
+    QFileDialog, QFrame, QPushButton, QButtonGroup, QGridLayout,
 )
-from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QIcon
+from PyQt6.QtCore import Qt, QRectF, QPointF
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QIcon, QFont
 
-from .constants import (
-    _SCRIPT_DIR, CYAN, GREEN, PURPLE, CPU_COLOR, GPU_COLOR,
-)
-from .theme import _THEME, _font
+from .constants import _SCRIPT_DIR, CYAN, GREEN, PURPLE, CPU_COLOR, GPU_COLOR
+from .theme import _THEME, _font, THEMES
 from .settings import _DEFAULT_SETTINGS
 from .sensors import s_battery
 from .widgets import Sparkline
@@ -216,6 +214,78 @@ class HistoryWindow(QWidget):
         self.hide(); e.ignore()
 
 
+# ── Theme Swatch Button ───────────────────────────────────────────────────────
+class _ThemeSwatch(QPushButton):
+    """Mini visual theme preview button used in the Settings theme picker."""
+
+    def __init__(self, theme_key: str, theme, parent=None):
+        super().__init__(parent)
+        self._key = theme_key
+        self._t   = theme
+        self.setCheckable(True)
+        self.setFixedSize(116, 74)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(theme.display_name)
+        self.setStyleSheet("border: none; background: transparent;")
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        t  = self._t
+        w, h = self.width(), self.height()
+
+        # Outer fill + border
+        outer = QRectF(1.5, 1.5, w - 3, h - 3)
+        p.setBrush(QBrush(QColor(t.bg)))
+        sel = self.isChecked()
+        p.setPen(QPen(QColor(t.cyan if sel else t.card_bd),
+                      2.5 if sel else 1.0))
+        p.drawRoundedRect(outer, 8, 8)
+
+        # Mini card preview (upper portion)
+        card_h = int(h * 0.60)
+        card_r = QRectF(7, 7, w - 14, card_h - 6)
+        p.setBrush(QBrush(QColor(t.card_bg)))
+        p.setPen(QPen(QColor(t.card_bd), 0.8))
+        p.drawRoundedRect(card_r, 4, 4)
+
+        # Mini gauge arc inside the card
+        arc_cx = card_r.left() + card_r.width() / 2
+        arc_cy = card_r.top() + card_r.height() * 0.52
+        arc_r2 = min(card_r.width(), card_r.height()) * 0.36
+        arc_rect = QRectF(arc_cx - arc_r2, arc_cy - arc_r2,
+                          arc_r2 * 2, arc_r2 * 2)
+        # Track
+        trk_col = QColor(t.card_bd); trk_col.setAlpha(200)
+        p.setPen(QPen(trk_col, 3.0, Qt.PenStyle.SolidLine,
+                      Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawArc(arc_rect, int(225 * 16), int(-270 * 16))
+        # Fill (70% at cyan color)
+        p.setPen(QPen(QColor(t.cyan), 3.0, Qt.PenStyle.SolidLine,
+                      Qt.PenCapStyle.RoundCap))
+        p.drawArc(arc_rect, int(225 * 16), int(-270 * 0.70 * 16))
+
+        # Four accent color dots below arc
+        dot_y  = card_r.bottom() - 6.0
+        colors = [t.cyan, t.green, t.purple, t.amber]
+        for i, col_hex in enumerate(colors):
+            dx = arc_cx - 18 + i * 12
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(QColor(col_hex)))
+            p.drawEllipse(QPointF(dx, dot_y), 3.5, 3.5)
+
+        # Theme name at bottom
+        f = QFont(); f.setPixelSize(10)
+        if sel:
+            f.setWeight(QFont.Weight.Bold)
+        p.setFont(f)
+        p.setPen(QPen(QColor(t.txt_hi if sel else t.txt_mid)))
+        p.drawText(QRectF(2, h - 19, w - 4, 17),
+                   Qt.AlignmentFlag.AlignCenter, t.display_name)
+        p.end()
+
+
 # ── Settings Dialog ───────────────────────────────────────────────────────────
 class SettingsDialog(QDialog):
     def __init__(self, settings: dict, parent=None, preview_cb=None):
@@ -236,17 +306,26 @@ class SettingsDialog(QDialog):
         # ── Appearance tab ─────────────────────────────────────────────────
         ap = QWidget(); al = QVBoxLayout(ap)
 
-        tg = QGroupBox("Theme"); tl = QVBoxLayout(tg)
-        self._theme_dark   = QRadioButton("Dark")
-        self._theme_light  = QRadioButton("Light")
-        self._theme_system = QRadioButton("Follow system")
-        t = settings.get("theme", "dark")
-        if t == "light":    self._theme_light.setChecked(True)
-        elif t == "system": self._theme_system.setChecked(True)
-        else:               self._theme_dark.setChecked(True)
-        tl.addWidget(self._theme_dark)
-        tl.addWidget(self._theme_light)
-        tl.addWidget(self._theme_system)
+        tg = QGroupBox("Theme")
+        tg_lay = QGridLayout(tg)
+        tg_lay.setSpacing(6)
+        tg_lay.setContentsMargins(10, 14, 10, 10)
+        self._theme_btn_grp: QButtonGroup = QButtonGroup(self)
+        self._theme_btn_grp.setExclusive(True)
+        self._theme_btns: dict[str, _ThemeSwatch] = {}
+        cur_theme = settings.get("theme", "dark")
+        # 5 columns × 2 rows
+        _COLS = 5
+        for idx, (key, th) in enumerate(THEMES.items()):
+            btn = _ThemeSwatch(key, th, tg)
+            self._theme_btn_grp.addButton(btn)
+            self._theme_btns[key] = btn
+            tg_lay.addWidget(btn, idx // _COLS, idx % _COLS)
+        matched = self._theme_btns.get(cur_theme)
+        if matched:
+            matched.setChecked(True)
+        elif self._theme_btns:
+            next(iter(self._theme_btns.values())).setChecked(True)
         al.addWidget(tg)
 
         self._compact_cb = QCheckBox("Compact mode (smaller gauges, hide sparklines)")
@@ -291,84 +370,6 @@ class SettingsDialog(QDialog):
             self._gauge_cbs[key] = cb; ol.addWidget(cb)
         gl.addWidget(opt_grp)
 
-        # ── Gauge colors ──────────────────────────────────────────────────
-        _PALETTE = [
-            ("#00ccdd", "Cyan"),
-            ("#00e676", "Green"),
-            ("#9d6fff", "Purple"),
-            ("#2979ff", "Blue"),
-            ("#ff6d00", "Orange"),
-            ("#f9a825", "Gold"),
-            ("#ff4081", "Pink"),
-            ("#76b900", "NVIDIA Green"),
-        ]
-        _DEFAULTS = {
-            "cpu_usage": CYAN,  "cpu_temp": CPU_COLOR,
-            "gpu_usage": CYAN,  "gpu_temp": GPU_COLOR,
-            "network":   CYAN,  "battery":  GREEN,
-        }
-        gc_cfg = settings.get("gauge_colors", {})
-        self._gauge_color_picks: dict[str, str] = {}
-        self._swatch_btns: dict[str, list[QLabel]] = {}
-
-        col_grp = QGroupBox("Gauge Colours"); col_lay = QVBoxLayout(col_grp)
-        col_lay.setSpacing(6)
-
-        def _refresh_swatches(key: str, selected_hex: str):
-            for bi, btn in enumerate(self._swatch_btns.get(key, [])):
-                sel = (_PALETTE[bi][0].lower() == selected_hex.lower())
-                bd = "2px solid white" if sel else "2px solid transparent"
-                btn.setStyleSheet(
-                    f"background:{_PALETTE[bi][0]}; border-radius:11px; border:{bd};")
-
-        def _make_swatch_row(key: str, label: str):
-            row = QHBoxLayout(); row.setSpacing(4)
-            lbl = QLabel(f"{label}:"); lbl.setFixedWidth(110)
-            lbl.setFont(_font(10))
-            row.addWidget(lbl)
-            cur = gc_cfg.get(key) or _DEFAULTS.get(key, CYAN)
-            self._gauge_color_picks[key] = cur
-            btns: list[QLabel] = []
-            for pi, (hex_c, tip) in enumerate(_PALETTE):
-                btn = QLabel()
-                btn.setFixedSize(22, 22)
-                btn.setToolTip(tip)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                selected = (hex_c.lower() == cur.lower())
-                border = "2px solid white" if selected else "2px solid transparent"
-                btn.setStyleSheet(
-                    f"background:{hex_c}; border-radius:11px; border:{border};")
-                def _make_click(k, h):
-                    def handler(_e):
-                        self._gauge_color_picks[k] = h
-                        _refresh_swatches(k, h)
-                    return handler
-                btn.mousePressEvent = _make_click(key, hex_c)
-                btns.append(btn)
-                row.addWidget(btn)
-            self._swatch_btns[key] = btns
-            row.addStretch()
-            col_lay.addLayout(row)
-
-        for key, lbl in [("cpu_usage", "CPU Usage"),
-                          ("cpu_temp",  "CPU Temp"),
-                          ("gpu_usage", "GPU Usage"),
-                          ("gpu_temp",  "GPU Temp"),
-                          ("network",   "Network"),
-                          ("battery",   "Battery")]:
-            _make_swatch_row(key, lbl)
-
-        reset_lbl = QLabel("<a href='reset'>Reset all to defaults</a>")
-        reset_lbl.setOpenExternalLinks(False)
-        reset_lbl.setFont(_font(10))
-        reset_lbl.setStyleSheet(f"color: {_THEME.cyan}; background: transparent;")
-        def _reset_colors():
-            for k, h in _DEFAULTS.items():
-                self._gauge_color_picks[k] = h
-                _refresh_swatches(k, h)
-        reset_lbl.linkActivated.connect(lambda _: _reset_colors())
-        col_lay.addWidget(reset_lbl)
-        gl.addWidget(col_grp)
         gl.addStretch()
         tabs.addTab(gp, "Gauges")
 
@@ -440,6 +441,45 @@ class SettingsDialog(QDialog):
         el.addStretch()
         tabs.addTab(ep, "Data")
 
+        # ── Alerts tab ────────────────────────────────────────────────────
+        alp = QWidget(); all_ = QVBoxLayout(alp)
+        self._alerts_master_cb = QCheckBox("Enable alerts")
+        self._alerts_master_cb.setChecked(settings.get("alerts", True))
+        all_.addWidget(self._alerts_master_cb)
+
+        thr_cfg = {**_DEFAULT_SETTINGS["alert_thresholds"],
+                   **settings.get("alert_thresholds", {})}
+        aen_cfg = {**_DEFAULT_SETTINGS["alerts_enabled"],
+                   **settings.get("alerts_enabled", {})}
+        self._alert_en_cbs:    dict[str, QCheckBox] = {}
+        self._alert_thr_spins: dict[str, QSpinBox]  = {}
+
+        al_grp = QGroupBox("Per-metric thresholds")
+        al_grp_lay = QVBoxLayout(al_grp); al_grp_lay.setSpacing(8)
+        _alert_defs = [
+            ("cpu_temp",  "CPU Temperature", "°C", 50, 120),
+            ("gpu_temp",  "GPU Temperature", "°C", 50, 120),
+            ("cpu_usage", "CPU Usage",        "%",  1, 100),
+            ("gpu_usage", "GPU Usage",        "%",  1, 100),
+        ]
+        for key, label, suffix, lo, hi in _alert_defs:
+            row = QHBoxLayout(); row.setSpacing(8)
+            cb = QCheckBox(label); cb.setChecked(aen_cfg.get(key, True))
+            cb.setMinimumWidth(160)
+            self._alert_en_cbs[key] = cb
+            spin = QSpinBox(); spin.setRange(lo, hi)
+            spin.setValue(thr_cfg.get(key, 90))
+            spin.setSuffix(suffix); spin.setFixedWidth(76)
+            self._alert_thr_spins[key] = spin
+            row.addWidget(cb)
+            row.addWidget(QLabel("alert at:"))
+            row.addWidget(spin)
+            row.addStretch()
+            al_grp_lay.addLayout(row)
+        all_.addWidget(al_grp)
+        all_.addStretch()
+        tabs.addTab(alp, "Alerts")
+
         # ── Profiles tab ──────────────────────────────────────────────────
         pp = QWidget(); pl2 = QVBoxLayout(pp)
         profiles = settings.get("profiles", {})
@@ -454,10 +494,9 @@ class SettingsDialog(QDialog):
         pl2.addWidget(self._profile_list)
 
         pbl = QHBoxLayout()
-        self._profile_load_btn  = QComboBox()
-        load_btn  = QLabel("<a href='load'>Load selected</a>")
-        save_btn  = QLabel("<a href='save'>Save as new…</a>")
-        del_btn   = QLabel("<a href='del'>Delete selected</a>")
+        load_btn = QLabel("<a href='load'>Load selected</a>")
+        save_btn = QLabel("<a href='save'>Save as new…</a>")
+        del_btn  = QLabel("<a href='del'>Delete selected</a>")
         for lbl in (load_btn, save_btn, del_btn):
             lbl.setOpenExternalLinks(False)
             lbl.setFont(_font(11))
@@ -484,13 +523,21 @@ class SettingsDialog(QDialog):
                         if gk in self._gauge_cbs:
                             self._gauge_cbs[gk].setChecked(gv)
                 elif k == "theme":
-                    if v == "light":   self._theme_light.setChecked(True)
-                    elif v == "system": self._theme_system.setChecked(True)
-                    else:               self._theme_dark.setChecked(True)
+                    btn = self._theme_btns.get(str(v))
+                    if btn:
+                        btn.setChecked(True)
+                    elif self._theme_btns:
+                        self._theme_btns.get("dark",
+                            next(iter(self._theme_btns.values()))).setChecked(True)
                 elif k == "compact":
                     self._compact_cb.setChecked(bool(v))
                 elif k == "opacity":
                     self._opacity_slider.setValue(int(v))
+                elif k == "refresh_ms":
+                    for ri in range(self._refresh_combo.count()):
+                        if self._refresh_combo.itemData(ri) == int(v):
+                            self._refresh_combo.setCurrentIndex(ri)
+                            break
             self._settings["active_profile"] = name
 
         def _save_profile():
@@ -498,12 +545,12 @@ class SettingsDialog(QDialog):
             if not name:
                 return
             snap = {
-                "theme":   ("light" if self._theme_light.isChecked()
-                            else "system" if self._theme_system.isChecked()
-                            else "dark"),
-                "compact": self._compact_cb.isChecked(),
-                "opacity": self._opacity_slider.value(),
-                "gauges":  {k: cb.isChecked() for k, cb in self._gauge_cbs.items()},
+                "theme":        next(
+                    (k for k, btn in self._theme_btns.items() if btn.isChecked()), "dark"),
+                "compact":      self._compact_cb.isChecked(),
+                "opacity":      self._opacity_slider.value(),
+                "gauges":       {k: cb.isChecked() for k, cb in self._gauge_cbs.items()},
+                "refresh_ms":   self._refresh_combo.currentData(),
             }
             profiles[name] = snap
             self._settings["profiles"] = profiles
@@ -534,9 +581,8 @@ class SettingsDialog(QDialog):
         root.addWidget(btns)
 
         # ── Wire up live-preview connections ──────────────────────────────
-        self._theme_dark.toggled.connect(lambda _: self._emit_preview())
-        self._theme_light.toggled.connect(lambda _: self._emit_preview())
-        self._theme_system.toggled.connect(lambda _: self._emit_preview())
+        for _btn in self._theme_btns.values():
+            _btn.toggled.connect(lambda checked: checked and self._emit_preview())
         self._compact_cb.toggled.connect(lambda _: self._emit_preview())
         self._opacity_slider.valueChanged.connect(lambda _: self._emit_preview())
         self._refresh_combo.currentIndexChanged.connect(lambda _: self._emit_preview())
@@ -545,9 +591,8 @@ class SettingsDialog(QDialog):
 
     def get_settings(self) -> dict:
         d = dict(self._settings)
-        d["theme"]      = ("light" if self._theme_light.isChecked()
-                           else "system" if self._theme_system.isChecked()
-                           else "dark")
+        d["theme"]      = next(
+            (k for k, btn in self._theme_btns.items() if btn.isChecked()), "dark")
         d["compact"]    = self._compact_cb.isChecked()
         d["opacity"]    = self._opacity_slider.value()
         d["monitor"]    = self._monitor_combo.currentIndex()
@@ -566,7 +611,9 @@ class SettingsDialog(QDialog):
         exp["max_hours"] = self._hours_spin.value()
         d["export"] = exp
 
-        d["gauge_colors"] = dict(self._gauge_color_picks)
+        d["alerts"]            = self._alerts_master_cb.isChecked()
+        d["alert_thresholds"]  = {k: sp.value() for k, sp in self._alert_thr_spins.items()}
+        d["alerts_enabled"]    = {k: cb.isChecked() for k, cb in self._alert_en_cbs.items()}
 
         d["profiles"]       = self._settings.get("profiles", {})
         d["active_profile"] = self._settings.get("active_profile", "")

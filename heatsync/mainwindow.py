@@ -7,9 +7,9 @@ import sys
 import json
 import socket
 import shutil
+import subprocess
 import tempfile
 import time
-import threading
 from datetime import datetime
 
 import psutil
@@ -28,7 +28,7 @@ from .constants import (
     CYAN, GREEN, CPU_COLOR, GPU_COLOR,
 )
 from .theme import (
-    _THEME, DARK_THEME, LIGHT_THEME,
+    _THEME, DARK_THEME, LIGHT_THEME, THEMES,
     apply_theme, _make_palette, _make_tray_icon,
 )
 from .settings import (
@@ -49,11 +49,11 @@ from .autostart import _set_autostart
 
 # ── Rounded window background ─────────────────────────────────────────────────
 class _Background(QWidget):
-    _R = 16.0
+    _R = 20.0
     _compact = False
 
     def set_squared(self, squared):
-        self._R = 0.0 if squared else 16.0; self.update()
+        self._R = 0.0 if squared else 20.0; self.update()
 
     def set_compact(self, compact: bool):
         self._compact = compact; self.update()
@@ -87,19 +87,17 @@ class MainWindow(QMainWindow):
         self._tray            = None
         self._docked          = False
         self._pre_dock_geom   = None
+        self._pre_dock_screen = None
         self._dock_info       = None
         self._last_pos        = None
         self._tray_level      = "normal"
         self._history_win: HistoryWindow | None = None
         self._logger:      DataLogger    | None = None
         self._cards:       dict[str, MonitorCard] = {}
-        self._benchmark_action = None
-        self._bench_timer      = None
-        self._bench_logger:    DataLogger | None = None
-        self._bench_end_ts:    float = 0.0
-        self._last_metrics:    dict  = {}
-        self._version_checked  = False
+        self._last_metrics: dict = {}
         self._last_gauge_settings: dict = {}
+        self._pre_compact_w:       int | None = None
+        self._locked_to_top:       bool = False
 
         self._settings = _load_settings()
         self._apply_settings_pre_ui(self._settings)
@@ -109,7 +107,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(cw)
 
         root = QVBoxLayout(cw)
-        root.setContentsMargins(14, 8, 14, 12); root.setSpacing(8)
+        root.setContentsMargins(16, 10, 16, 14); root.setSpacing(12)
 
         self._title_bar = TitleBar(
             self, cpu_color=CPU_COLOR, gpu_color=GPU_COLOR,
@@ -132,7 +130,7 @@ class MainWindow(QMainWindow):
         self._gauge_row_widget = QWidget()
         self._gauge_row_widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._gauge_row = QHBoxLayout(self._gauge_row_widget)
-        self._gauge_row.setSpacing(12)
+        self._gauge_row.setSpacing(14)
         self._gauge_row.setContentsMargins(0, 0, 0, 0)
         root.addWidget(self._gauge_row_widget, 1)
 
@@ -169,8 +167,6 @@ class MainWindow(QMainWindow):
         self._refresh_timer.start(refresh_ms)
         self._refresh()
 
-        QTimer.singleShot(5000, self._check_version_bg)
-
         self._reconfigure_logger(self._settings)
 
         if QSystemTrayIcon.isSystemTrayAvailable():
@@ -190,10 +186,6 @@ class MainWindow(QMainWindow):
             menu.addAction("Settings…").triggered.connect(self._open_settings)
             menu.addSeparator()
             menu.addAction("Copy Snapshot").triggered.connect(self._copy_snapshot)
-            self._benchmark_action = menu.addAction("Benchmark Mode (30s)")
-            self._benchmark_action.triggered.connect(self._start_benchmark)
-            menu.addSeparator()
-            menu.addAction("Check for Updates…").triggered.connect(self._check_version_manual)
             menu.addSeparator()
             menu.addAction("Quit").triggered.connect(QApplication.instance().quit)
             menu.aboutToShow.connect(self._update_tray_menu)
@@ -212,6 +204,14 @@ class MainWindow(QMainWindow):
         self._alert_ticks:   dict[str, int]   = {}
         self._alert_notified: dict[str, float] = {}
 
+        # Lock-to-top enforcement timer
+        self._lock_timer = QTimer(self)
+        self._lock_timer.setInterval(3000)
+        self._lock_timer.timeout.connect(self._enforce_lock_top)
+        if self._settings.get("locked_to_top", False):
+            self._locked_to_top = True
+            self._lock_timer.start()
+
         # Auto-follow system theme
         try:
             hints = QApplication.instance().styleHints()
@@ -221,6 +221,7 @@ class MainWindow(QMainWindow):
 
     # ── Settings helpers ───────────────────────────────────────────────────
     def _apply_opacity(self, opacity: int):
+        self._pre_dock_screen = self.screen()  # track screen before effect changes
         cw = self.centralWidget()
         if opacity >= 100:
             cw.setGraphicsEffect(None)
@@ -231,15 +232,7 @@ class MainWindow(QMainWindow):
 
     def _apply_settings_pre_ui(self, s: dict):
         """Apply theme from settings before any widgets are created."""
-        import heatsync.theme as _theme_mod
-        t = s.get("theme", "dark")
-        if t == "light":
-            _theme_mod._THEME = LIGHT_THEME
-        elif t == "system":
-            dark = QApplication.styleHints().colorScheme() != Qt.ColorScheme.Light
-            _theme_mod._THEME = DARK_THEME if dark else LIGHT_THEME
-        else:
-            _theme_mod._THEME = DARK_THEME
+        apply_theme(THEMES.get(s.get("theme", "dark"), DARK_THEME))
         if s.get("always_on_top", False):
             self.setWindowFlags(
                 self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
@@ -258,18 +251,12 @@ class MainWindow(QMainWindow):
         _save_settings(s)
 
         t = s.get("theme", "dark")
-        if t == "light":   new_theme = LIGHT_THEME
-        elif t == "system":
-            dark = QApplication.styleHints().colorScheme() != Qt.ColorScheme.Light
-            new_theme = DARK_THEME if dark else LIGHT_THEME
-        else:              new_theme = DARK_THEME
-        if t != old_theme:
-            apply_theme(new_theme)
-            self._div1.setStyleSheet(f"background: {_THEME.card_bd}; border: none;")
-            self._div2.setStyleSheet(f"background: {_THEME.card_bd}; border: none;")
+        new_theme = THEMES.get(t, DARK_THEME)
+        apply_theme(new_theme)
+        self._div1.setStyleSheet(f"background: {_THEME.card_bd}; border: none;")
+        self._div2.setStyleSheet(f"background: {_THEME.card_bd}; border: none;")
 
         self._apply_opacity(s.get("opacity", 100))
-        apply_theme(_THEME)
 
         new_ms = s.get("refresh_ms", 1000)
         if new_ms != self._refresh_timer.interval():
@@ -283,6 +270,10 @@ class MainWindow(QMainWindow):
             self._move_to_monitor(new_monitor)
 
         _set_autostart(s.get("autostart", False))
+
+        new_locked = s.get("locked_to_top", False)
+        if new_locked != self._locked_to_top:
+            self._toggle_lock_top(new_locked)
 
         new_export = s.get("export", {})
         if new_export != old_export:
@@ -335,105 +326,30 @@ class MainWindow(QMainWindow):
             self._tray.showMessage("HeatSync", "Snapshot copied to clipboard.",
                                    QSystemTrayIcon.MessageIcon.Information, 2000)
 
-    # ── Benchmark mode ─────────────────────────────────────────────────────
-    def _start_benchmark(self):
-        if self._bench_timer and self._bench_timer.isActive():
-            self._stop_benchmark()
-            return
-        bench_path = os.path.join(os.path.expanduser("~"),
-                                  f"heatsync_bench_{int(time.time())}.csv")
-        self._bench_logger = DataLogger(bench_path, "csv", max_hours=1)
-        self._bench_end_ts = time.monotonic() + 30.0
-        self._bench_timer  = QTimer(self)
-        self._bench_timer.timeout.connect(self._bench_tick)
-        self._bench_timer.start(100)
-        if self._benchmark_action:
-            self._benchmark_action.setText("Stop Benchmark")
-        if self._tray:
-            self._tray.showMessage("HeatSync", "Benchmark started (30s @ 100ms).",
-                                   QSystemTrayIcon.MessageIcon.Information, 2000)
-
-    def _bench_tick(self):
-        if time.monotonic() >= self._bench_end_ts:
-            self._stop_benchmark()
-            return
-        metrics = {
-            "cpu_usage": s_cpu_usage(),
-            "cpu_temp":  s_cpu_temp(),
-            "gpu_usage": s_gpu_usage(),
-            "gpu_temp":  s_gpu_temp(),
-            "gpu_power": s_gpu_power(),
-        }
-        if self._bench_logger:
-            self._bench_logger.record(metrics)
-
-    def _stop_benchmark(self):
-        if self._bench_timer:
-            self._bench_timer.stop()
-            self._bench_timer = None
-        csv_path = ""
-        if self._bench_logger:
-            self._bench_logger.flush()
-            csv_path = os.path.join(self._bench_logger._path, "heatsync_data.csv")
-            self._bench_logger.close()
-            self._bench_logger = None
-        if self._benchmark_action:
-            self._benchmark_action.setText("Benchmark Mode (30s)")
-        if self._tray and csv_path:
-            self._tray.showMessage("HeatSync", f"Benchmark saved:\n{csv_path}",
-                                   QSystemTrayIcon.MessageIcon.Information, 4000)
-
-    # ── Version checker ────────────────────────────────────────────────────
-    def _check_version_bg(self):
-        if self._version_checked:
-            return
-        self._version_checked = True
-        threading.Thread(target=self._do_version_check,
-                         args=(False,), daemon=True).start()
-
-    def _check_version_manual(self):
-        threading.Thread(target=self._do_version_check,
-                         args=(True,), daemon=True).start()
-
-    def _do_version_check(self, manual: bool):
-        try:
-            import urllib.request, urllib.error
-            url = "https://raw.githubusercontent.com/mackm/HeatSync/main/VERSION"
-            with urllib.request.urlopen(url, timeout=5) as resp:
-                remote = resp.read().decode().strip()
-            if not remote:
-                if manual and self._tray:
-                    QTimer.singleShot(0, lambda: self._tray.showMessage(
-                        "HeatSync", "Could not read remote version.",
-                        QSystemTrayIcon.MessageIcon.Warning, 3000))
-                return
-            remote_v = remote.lstrip("v")
-            local_v  = VERSION.lstrip("v")
-            if remote_v != local_v:
-                msg = f"Update available: v{remote_v} (you have {VERSION})"
-            else:
-                msg = f"HeatSync is up to date ({VERSION})" if manual else ""
-            if msg and self._tray:
-                _msg = msg
-                QTimer.singleShot(0, lambda: self._tray.showMessage(
-                    "HeatSync", _msg,
-                    QSystemTrayIcon.MessageIcon.Information, 5000))
-        except Exception:
-            if manual and self._tray:
-                QTimer.singleShot(0, lambda: self._tray.showMessage(
-                    "HeatSync", "Version check failed (no internet?).",
-                    QSystemTrayIcon.MessageIcon.Warning, 3000))
 
     def _apply_compact_geometry(self, compact: bool):
         if compact:
             h = 46 + 20
             self.setMinimumSize(600, h)
             if self.width() < 600 or self.height() != h:
+                # Snapshot normal-mode width before KWin can mangle it
+                if self._pre_compact_w is None:
+                    self._pre_compact_w = max(self.width(), 880)
                 self.resize(max(self.width(), 700), h)
         else:
             self.setMinimumSize(880, 520)
+            # Restore saved width — KWin may have set self.width() to screen-width
+            restore_w = self._pre_compact_w
+            self._pre_compact_w = None
+            if restore_w and 880 <= restore_w <= 2400:
+                w = restore_w
+            else:
+                # Clamp: KWin-mangled widths are typically >1600; fall back to 880
+                w = self.width() if 880 <= self.width() <= 1600 else 880
             if self.height() < 520:
-                self.resize(max(self.width(), 880), 540)
+                self.resize(w, 540)
+            else:
+                self.resize(w, max(self.height(), 520))
 
     def _rebuild_gauge_row(self, s: dict):
         compact = s.get("compact", False)
@@ -470,10 +386,10 @@ class MainWindow(QMainWindow):
             return
 
         card_defs = [
-            ("cpu_usage", "CPU USAGE", "%",   0, 100, CYAN,      70, 90,  False, False, True),
-            ("cpu_temp",  "CPU TEMP",  "°C",  0, 105, CPU_COLOR, 80, 95,  True,  False, False),
-            ("gpu_usage", "GPU USAGE", "%",   0, 100, CYAN,     200, 200, False, False, True),
-            ("gpu_temp",  "GPU TEMP",  "°C",  0,  95, GPU_COLOR, 75, 88,  True,  False, False),
+            ("cpu_usage", "CPU USAGE", "%",   0, 100, CYAN,      70, 90, False, False, True),
+            ("cpu_temp",  "CPU TEMP",  "°C",  0, 105, CPU_COLOR, 80, 95, True,  False, False),
+            ("gpu_usage", "GPU USAGE", "%",   0, 100, CYAN,      95, 100, False, False, True),
+            ("gpu_temp",  "GPU TEMP",  "°C",  0,  95, GPU_COLOR, 75, 88, True,  False, False),
         ]
         gc = s.get("gauge_colors", {})
         for key, label, unit, lo, hi, color, warn, danger, is_temp, inv, is_usage in card_defs:
@@ -577,6 +493,8 @@ class MainWindow(QMainWindow):
         if self._settings.get("alerts", True) and self._tray:
             _thr = {**_DEFAULT_SETTINGS["alert_thresholds"],
                     **self._settings.get("alert_thresholds", {})}
+            _aen = {**_DEFAULT_SETTINGS.get("alerts_enabled", {}),
+                    **self._settings.get("alerts_enabled", {})}
             alert_defs = [
                 ("cpu_temp",  metrics.get("cpu_temp",  0), _thr["cpu_temp"],  "CPU Temperature"),
                 ("gpu_temp",  metrics.get("gpu_temp",  0), _thr["gpu_temp"],  "GPU Temperature"),
@@ -585,6 +503,9 @@ class MainWindow(QMainWindow):
             ]
             now = time.monotonic()
             for key, val, threshold, label in alert_defs:
+                if not _aen.get(key, True):
+                    self._alert_ticks[key] = 0
+                    continue
                 if val >= threshold:
                     self._alert_ticks[key] = self._alert_ticks.get(key, 0) + 1
                 else:
@@ -598,6 +519,11 @@ class MainWindow(QMainWindow):
                         QSystemTrayIcon.MessageIcon.Warning, 5000)
 
     # ── Settings / History dialogs ─────────────────────────────────────────
+    def _enter_compact_mode(self):
+        s = dict(self._settings); s["compact"] = True
+        _save_settings(s)
+        self._apply_settings_live(s)
+
     def _exit_compact_mode(self):
         s = dict(self._settings); s["compact"] = False
         _save_settings(s)
@@ -658,7 +584,8 @@ class MainWindow(QMainWindow):
             for key in ("theme", "compact", "gauges", "monitor", "autostart",
                         "export", "always_on_top", "alerts", "opacity",
                         "refresh_ms", "profiles", "active_profile",
-                        "gauge_colors", "alert_thresholds"):
+                        "gauge_colors", "alert_thresholds", "alerts_enabled",
+                        "locked_to_top"):
                 d[key] = self._settings.get(key, d.get(key))
             if self._history_win:
                 self._history_win.save_geometry(d)
@@ -794,7 +721,6 @@ class MainWindow(QMainWindow):
         try:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False) as fh:
                 fh.write(js); tmp = fh.name
-            import subprocess
             subprocess.run([qdbus, "org.kde.KWin", "/Scripting",
                             "org.kde.kwin.Scripting.loadScript", tmp, plugin],
                            capture_output=True, timeout=3)
@@ -834,11 +760,42 @@ class MainWindow(QMainWindow):
             f"    wins[i].frameGeometry = {{x:{x}, y:{y}, width:{w}, height:{h}}};"
             f"    break; }}}}", tag="hs_geom")
 
+    # ── Lock to top ────────────────────────────────────────────────────────
+    def _toggle_lock_top(self, checked: bool = None):
+        if checked is None:
+            checked = not self._locked_to_top
+        self._locked_to_top = checked
+        s = dict(self._settings); s["locked_to_top"] = checked
+        _save_settings(s); self._settings = s
+        if checked:
+            if not self._docked:
+                self.toggle_dock()
+            self._lock_timer.start()
+            self._enforce_lock_top()
+        else:
+            self._lock_timer.stop()
+
+    def _enforce_lock_top(self):
+        """Re-pin to top edge every 3s while locked."""
+        if not self._locked_to_top or not self._docked:
+            return
+        cur_screen = (QApplication.screenAt(self.frameGeometry().center())
+                      or self._pre_dock_screen or self.screen())
+        if cur_screen is None:
+            return
+        ag  = cur_screen.availableGeometry()
+        tx, ty, dw, dh = ag.x(), ag.y(), ag.width(), self.height()
+        if IS_WAYLAND:
+            self._kwin_set_geometry(tx, ty, dw, dh)
+        else:
+            self.move(tx, ty)
+
     # ── Dock toggle ────────────────────────────────────────────────────────
     def toggle_dock(self, via_drag: bool = False):
         cw      = self.centralWidget()
         compact = self._settings.get("compact", False)
-        cur_screen = QApplication.screenAt(self.frameGeometry().center()) or self.screen()
+        cur_screen = (QApplication.screenAt(self.frameGeometry().center())
+                      or self._pre_dock_screen or self.screen())
         if not self._docked:
             self._pre_dock_geom = self.geometry()
             ag = cur_screen.availableGeometry()
@@ -867,6 +824,12 @@ class MainWindow(QMainWindow):
                     self.resize(pw, ph)
             self._docked = False
             if isinstance(cw, _Background): cw.set_squared(False)
+            # Clear lock when undocking — lock only applies while docked
+            if self._locked_to_top:
+                self._locked_to_top = False
+                self._lock_timer.stop()
+                s = dict(self._settings); s["locked_to_top"] = False
+                _save_settings(s); self._settings = s
         if not compact:
             self._title_bar.dock_btn.set_active(self._docked)
         for card in self._cards.values():

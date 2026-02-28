@@ -147,11 +147,6 @@ PURPLE = "#9d6fff"
 AMBER  = "#ffa040"
 C_WARN = "#ff9800"
 C_DANG = "#f44336"
-BLUE   = "#2979ff"
-ORANGE = "#ff6d00"
-GOLD   = "#f9a825"
-PINK   = "#ff4081"
-
 # ── CPU / GPU name helpers ────────────────────────────────────────────────────
 def _get_cpu_name() -> str:
     if IS_WINDOWS:

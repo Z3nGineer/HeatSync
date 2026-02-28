@@ -162,6 +162,16 @@ def s_gpu_power() -> float:
     return 0.0
 
 
+def s_gpu_power_limit() -> float:
+    """Returns GPU TDP power limit in watts (pynvml), or 0.0 if unavailable."""
+    if GPU_HANDLE:
+        try:
+            return pynvml.nvmlDeviceGetPowerManagementLimit(GPU_HANDLE) / 1000.0
+        except Exception:
+            return 0.0
+    return 0.0
+
+
 def s_gpu_vram():
     if GPU_HANDLE:
         try:

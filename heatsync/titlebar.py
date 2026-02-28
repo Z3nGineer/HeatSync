@@ -6,7 +6,7 @@ import os
 import time
 from datetime import datetime
 
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QApplication, QSizePolicy
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QApplication, QSizePolicy, QMenu
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QPixmap,
@@ -44,7 +44,7 @@ class _WinBtn(QWidget):
         super().__init__()
         self._symbol = symbol; self._color = QColor(color)
         self._dim = QColor(color).darker(140); self._cb = callback
-        self._hovered = False; self.setFixedSize(16, 16)
+        self._hovered = False; self.setFixedSize(18, 18)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
@@ -57,10 +57,10 @@ class _WinBtn(QWidget):
         p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(self._color if self._hovered else self._dim)
-        p.drawEllipse(0, 0, 16, 16)
+        p.drawEllipse(0, 0, 18, 18)
         if self._hovered:
             p.setFont(_font(9, bold=True)); p.setPen(QColor(0, 0, 0, 210))
-            p.drawText(QRectF(0, 0, 16, 16), Qt.AlignmentFlag.AlignCenter, self._symbol)
+            p.drawText(QRectF(0, 0, 18, 18), Qt.AlignmentFlag.AlignCenter, self._symbol)
         p.end()
 
 
@@ -167,8 +167,7 @@ class TitleBar(QWidget):
             bp.setRenderHint(QPainter.RenderHint.Antialiasing)
             bp.setPen(Qt.PenStyle.NoPen)
             bp.setBrush(QBrush(QColor(0, 0, 0, 170)))
-            from PyQt6.QtCore import QRectF as _QRectF
-            bp.drawEllipse(_QRectF(0, 0, 34, 34))
+            bp.drawEllipse(QRectF(0, 0, 34, 34))
             bp.drawPixmap(4, 4, src); bp.end()
             icon_lbl = QLabel(); icon_lbl.setPixmap(bordered); icon_lbl.setFixedSize(34, 34)
             icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -176,14 +175,14 @@ class TitleBar(QWidget):
             lay.addWidget(icon_lbl); lay.addSpacing(8)
 
         self._title_label = QLabel("HEATSYNC")
-        self._title_label.setFont(_font(17, bold=True))
+        self._title_label.setFont(_font(15, bold=True))
         self._title_label.setStyleSheet(
             f"color: {_THEME.cyan}; letter-spacing: 3px; background: transparent;")
         self._title_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         self._ver_label = QLabel(VERSION)
-        self._ver_label.setFont(_font(10))
-        self._ver_label.setStyleSheet(f"color: {_THEME.txt_hi}; background: transparent;")
+        self._ver_label.setFont(_font(11))
+        self._ver_label.setStyleSheet(f"color: {_THEME.txt_mid}; background: transparent;")
         self._ver_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         def _icon_lbl(px: QPixmap) -> QLabel:
@@ -246,6 +245,7 @@ class TitleBar(QWidget):
         if on_settings:
             self._settings_btn = _IconBtn("⚙", on_settings)
             lay.addWidget(self._settings_btn); lay.addSpacing(6)
+        lay.addSpacing(8)
         lay.addWidget(self.dock_btn); lay.addSpacing(10)
         lay.addWidget(btn_min); lay.addSpacing(8); lay.addWidget(btn_cls)
 
@@ -258,7 +258,7 @@ class TitleBar(QWidget):
     def _apply_theme_styles(self):
         self._title_label.setStyleSheet(
             f"color: {_THEME.cyan}; letter-spacing: 3px; background: transparent;")
-        self._ver_label.setStyleSheet(f"color: {_THEME.txt_hi}; background: transparent;")
+        self._ver_label.setStyleSheet(f"color: {_THEME.txt_mid}; background: transparent;")
         self._hw_cpu.setStyleSheet(f"color: {_THEME.txt_hi}; background: transparent;")
         self._hw_gpu.setStyleSheet(f"color: {_THEME.txt_hi}; background: transparent;")
         self._time_lbl.setStyleSheet(f"color: {_THEME.txt_hi}; background: transparent;")
@@ -271,7 +271,9 @@ class TitleBar(QWidget):
             now = time.monotonic() * 1000
             dt, self._last_press_ms = now - self._last_press_ms, now
             if dt > QApplication.doubleClickInterval():
-                if self._win._docked:
+                if getattr(self._win, '_locked_to_top', False):
+                    pass  # locked — no drag
+                elif self._win._docked:
                     self._press_pos = e.position()
                 else:
                     h = self._win.windowHandle()
@@ -281,6 +283,7 @@ class TitleBar(QWidget):
     def mouseMoveEvent(self, e):
         if (self._press_pos is not None
                 and self._win._docked
+                and not getattr(self._win, '_locked_to_top', False)
                 and e.buttons() & Qt.MouseButton.LeftButton):
             delta = e.position() - self._press_pos
             if abs(delta.x()) + abs(delta.y()) > QApplication.startDragDistance():
@@ -300,3 +303,24 @@ class TitleBar(QWidget):
             self._press_pos = None
             self._win.toggle_dock()
         super().mouseDoubleClickEvent(e)
+
+    def contextMenuEvent(self, e):
+        win = self._win
+        menu = QMenu(self)
+        bg = _THEME.card_bg; fg = _THEME.txt_hi; bd = _THEME.card_bd
+        menu.setStyleSheet(
+            f"QMenu{{background:{bg};color:{fg};border:1px solid {bd};}}"
+            f"QMenu::item:selected{{background:{bd};}}")
+        dock_lbl = "Undock" if win._docked else "Dock to Top"
+        menu.addAction(dock_lbl, win.toggle_dock)
+        if win._docked:
+            lock_act = menu.addAction("Lock to Top")
+            lock_act.setCheckable(True)
+            lock_act.setChecked(getattr(win, '_locked_to_top', False))
+            lock_act.triggered.connect(win._toggle_lock_top)
+        menu.addSeparator()
+        menu.addAction("Compact Mode", win._enter_compact_mode)
+        menu.addAction("Settings…",    win._open_settings)
+        menu.addSeparator()
+        menu.addAction("Quit", QApplication.instance().quit)
+        menu.exec(e.globalPos())

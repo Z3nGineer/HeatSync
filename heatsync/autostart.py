@@ -26,13 +26,19 @@ def _autostart_linux(enable: bool) -> None:
     path    = os.path.join(cfg_dir, "heatsync.desktop")
     if enable:
         os.makedirs(cfg_dir, exist_ok=True)
-        exe = sys.executable if not getattr(sys, "frozen", False) else os.path.abspath(sys.executable)
-        script = os.path.abspath(sys.argv[0])
-        cmd = exe if getattr(sys, "frozen", False) else f"{exe} {script}"
+        if getattr(sys, "frozen", False):
+            cmd = os.path.abspath(sys.executable)
+        else:
+            cmd = f"{os.path.abspath(sys.executable)} {os.path.abspath(sys.argv[0])}"
         with open(path, "w") as f:
-            f.write(f"[Desktop Entry]\nType=Application\nName=HeatSync\n"
-                    f"Exec={cmd}\nHidden=false\nNoDisplay=false\n"
-                    f"X-GNOME-Autostart-enabled=true\n")
+            f.write(
+                f"[Desktop Entry]\nType=Application\nName=HeatSync\n"
+                f"Exec={cmd}\nHidden=false\nNoDisplay=false\n"
+                f"X-GNOME-Autostart-enabled=true\n"
+                f"StartupNotify=false\nStartupWMClass=heatsync\n"
+                f"X-KDE-autostart-after=panel\n"
+                f"X-KDE-Autostart-enabled=true\n"
+            )
     else:
         try:
             os.unlink(path)

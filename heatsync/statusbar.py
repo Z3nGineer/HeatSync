@@ -2,8 +2,6 @@
 heatsync/statusbar.py — StatusBar widget.
 """
 
-import os
-
 import psutil
 
 from PyQt6.QtWidgets import (
@@ -14,7 +12,7 @@ from PyQt6.QtCore import Qt
 from .theme import _THEME, _font
 from .sensors import (
     s_ram, s_ram_info, s_gpu_vram, s_cpu_freq,
-    s_disk_all, s_gpu_power, s_nvme_temps,
+    s_disk_all, s_gpu_power, s_gpu_power_limit, s_nvme_temps,
 )
 
 
@@ -34,24 +32,48 @@ class StatusBar(QWidget):
         lay.setSpacing(0)
 
         self._lbs: dict[str, QLabel] = {}
-        keys = ("RAM", "Swap", "VRAM", "Freq", "Cores", "Disk", "GPU Power", "NVMe")
-        for i, key in enumerate(keys):
-            if i > 0:
-                lay.addSpacing(14)
+        self._dots: list[QLabel] = []
+
+        # Groups: [group1, group2, ...] — dot separator between groups
+        groups: list[tuple[str, ...]] = [
+            ("RAM", "Swap", "VRAM"),
+            ("Freq", "Cores"),
+            ("Disk",),
+            ("GPU Power",),
+            ("NVMe",),
+        ]
+
+        def _make_label(key: str) -> QLabel:
             lb = QLabel()
             lb.setTextFormat(Qt.TextFormat.RichText)
-            lb.setFont(_font(11))
+            lb.setFont(_font(12))
             lb.setMinimumWidth(0)
-            lb.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+            lb.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
             lb.setStyleSheet("background: transparent;")
             self._lbs[key] = lb
-            lay.addWidget(lb)
+            return lb
+
+        for g_idx, group in enumerate(groups):
+            if g_idx > 0:
+                lay.addSpacing(6)
+                dot = QLabel("·")
+                dot.setFont(_font(12))
+                dot.setStyleSheet(f"color: {_THEME.txt_lo}; background: transparent;")
+                self._dots.append(dot)
+                lay.addWidget(dot)
+                lay.addSpacing(6)
+            for i, key in enumerate(group):
+                if i > 0:
+                    lay.addSpacing(8)
+                lay.addWidget(_make_label(key))
+
         lay.addStretch(1)
 
     def _apply_theme_styles(self):
         for lb in self._lbs.values():
             lb.setStyleSheet("background: transparent;")
-        # re-render all labels with updated theme colors
+        for dot in self._dots:
+            dot.setStyleSheet(f"color: {_THEME.txt_lo}; background: transparent;")
         self.refresh()
 
     def refresh(self):
@@ -65,7 +87,7 @@ class StatusBar(QWidget):
         else:
             ram_sfx = ""
         self._lbs["RAM"].setText(
-            _sb_html("RAM", f"{used_r:.1f}/{tot_r:.0f}G ({pct_r:.0f}%){ram_sfx}"))
+            _sb_html("MEM", f"{used_r:.1f}/{tot_r:.0f}G ({pct_r:.0f}%){ram_sfx}"))
 
         sw = psutil.swap_memory()
         self._lbs["Swap"].setText(
@@ -79,24 +101,35 @@ class StatusBar(QWidget):
 
         freq = s_cpu_freq()
         cores = psutil.cpu_count(logical=True)
-        self._lbs["Freq"].setText(_sb_html("CPU", f"{freq:.2f}GHz"))
+        self._lbs["Freq"].setText(_sb_html("CLK", f"{freq:.2f}GHz"))
         self._lbs["Cores"].setText(_sb_html("×", f"{cores}"))
 
-        # Multi-disk: show up to 2 mounts compactly
+        # Disk: show single most-used mount by percentage
         disks = s_disk_all()
         if disks:
-            parts = []
-            for mount, used, total, pct in disks[:2]:
-                base = os.path.basename(mount.rstrip("/\\")) or mount
-                short = base if len(base) <= 6 else base[:6]
-                parts.append(f"{short} {used:.0f}/{total:.0f}G")
-            self._lbs["Disk"].setText(_sb_html("Disk", "  ".join(parts)))
+            _mount, used, total, pct = max(disks, key=lambda x: x[3])
+
+            def _fmt_gb(gb: float) -> str:
+                if gb >= 1000:
+                    return f"{gb / 1000:.1f}TB"
+                return f"{gb:.0f}G"
+
+            self._lbs["Disk"].setText(
+                _sb_html("Disk", f"{_fmt_gb(used)}/{_fmt_gb(total)} ({pct:.0f}%)"))
         else:
             self._lbs["Disk"].setText(_sb_html("Disk", "N/A"))
 
         pwr = s_gpu_power()
-        self._lbs["GPU Power"].setText(
-            _sb_html("GPU", f"{pwr:.0f}W") if pwr > 0 else _sb_html("GPU", "N/A"))
+        limit = s_gpu_power_limit()
+        if pwr > 0:
+            if limit > 0:
+                pwr_pct = pwr / limit * 100
+                self._lbs["GPU Power"].setText(
+                    _sb_html("PWR", f"{pwr:.0f}W ({pwr_pct:.0f}%)"))
+            else:
+                self._lbs["GPU Power"].setText(_sb_html("PWR", f"{pwr:.0f}W"))
+        else:
+            self._lbs["GPU Power"].setText(_sb_html("PWR", "N/A"))
 
         nvme = s_nvme_temps()
         if nvme:
