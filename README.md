@@ -18,11 +18,11 @@
 
 ---
 
-![HeatSync](assets/screenshot.png)
+![Docked Mode](assets/screenshot.png)
 
-![HeatSync under load](assets/screenshot-load.png)
+![Dashboard](assets/screenshot-load.png)
 
-![HeatSync compact mode](assets/screenshot-compact.png)
+![Compact Mode](assets/screenshot-compact.png)
 
 ---
 
