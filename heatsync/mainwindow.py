@@ -45,6 +45,7 @@ from .statusbar import StatusBar
 from .compact import CompactBar
 from .dialogs import DataLogger, HistoryWindow, SettingsDialog
 from .autostart import _set_autostart
+from .shortcuts import _create_shortcuts
 
 
 # ── Rounded window background ─────────────────────────────────────────────────
@@ -871,5 +872,15 @@ def main():
 
     win = MainWindow()
     app.setPalette(_make_palette(_THEME))
+
+    s = _load_settings()
+    if not s.get("first_run_done", False):
+        _create_shortcuts()
+        _set_autostart(True)
+        s["first_run_done"] = True
+        s["autostart"] = True
+        _save_settings(s)
+        win._settings = s
+
     win.show()
     sys.exit(app.exec())

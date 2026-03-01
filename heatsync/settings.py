@@ -53,6 +53,7 @@ _DEFAULT_SETTINGS: dict = {
         "gpu_usage": False,  # off — high GPU usage is normal during gaming/AI
     },
     "locked_to_top": False,
+    "first_run_done": False,
 }
 
 _GEOMETRY_KEYS = frozenset({

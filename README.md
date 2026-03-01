@@ -68,6 +68,10 @@ A slim bar showing all key stats in minimal screen space:
 - RAM, network speeds, disk usage
 - Live clock and date
 
+### First Run
+
+On first launch, HeatSync automatically creates a desktop shortcut and enables start-on-login -- no setup needed. Autostart can be disabled in Settings, and shortcuts can be removed normally.
+
 ### Display Options
 
 - **Dock mode** -- double-click the title bar to snap to the top edge as a full-width bar
@@ -137,7 +141,7 @@ cd HeatSync
 bash install.sh
 ```
 
-`install.sh` creates a `.venv`, installs dependencies, and sets up autostart.
+`install.sh` creates a `.venv` and installs dependencies. On first launch, HeatSync adds itself to your app menu and enables autostart automatically.
 
 ### Windows
 
@@ -157,7 +161,7 @@ cd HeatSync
 install.bat
 ```
 
-5. **Launch HeatSync** -- double-click `run.bat` in the HeatSync folder, or run:
+5. **Launch HeatSync** -- double-click `run.bat` in the HeatSync folder. On first launch, a desktop shortcut and Start Menu entry are created automatically.
 
 ```
 .venv\Scripts\python.exe HeatSync.py
@@ -195,6 +199,8 @@ bash install.sh
 bash run.sh
 ```
 
+On first launch, a shortcut is created in `~/Applications` and autostart is enabled automatically.
+
 ---
 
 ## Themes
@@ -225,7 +231,7 @@ The settings dialog has 7 tabs:
 | **Appearance** | Theme, compact mode, opacity |
 | **Gauges** | Toggle CPU, GPU, network, battery, fan, per-core |
 | **Display** | Monitor selection, refresh rate (0.5s - 10s) |
-| **Startup** | Launch on login |
+| **Startup** | Launch on login (enabled automatically on first run) |
 | **Data** | CSV/NDJSON export, path, retention |
 | **Alerts** | Thresholds per metric, enable/disable |
 | **Profiles** | Save/load/delete configuration presets |
