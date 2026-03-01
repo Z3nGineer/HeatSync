@@ -76,28 +76,12 @@ build-linux:
       cp dist/HeatSync AppDir/usr/bin/
       cp assets/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/heatsync.png
       cp assets/icon.png AppDir/heatsync.png
-    # Desktop entry (no leading whitespace)
-    - |
-      cat > AppDir/heatsync.desktop << 'EOF'
-      [Desktop Entry]
-      Type=Application
-      Name=HeatSync
-      Comment=Real-time system monitor
-      Exec=HeatSync
-      Icon=heatsync
-      Categories=System;Monitor;
-      Terminal=false
-      EOF
-      cp AppDir/heatsync.desktop AppDir/usr/share/applications/
+    # Desktop entry
+    - printf '[Desktop Entry]\nType=Application\nName=HeatSync\nComment=Real-time system monitor\nExec=HeatSync\nIcon=heatsync\nCategories=System;Monitor;\nTerminal=false\n' > AppDir/heatsync.desktop
+    - cp AppDir/heatsync.desktop AppDir/usr/share/applications/
     # AppRun launcher
-    - |
-      cat > AppDir/AppRun << 'APPRUN'
-      #!/bin/bash
-      SELF=$(readlink -f "$0")
-      HERE=${SELF%/*}
-      exec "${HERE}/usr/bin/HeatSync" "$@"
-      APPRUN
-      chmod +x AppDir/AppRun
+    - printf '#!/bin/bash\nSELF=$(readlink -f "$0")\nHERE=${SELF%%/*}\nexec "${HERE}/usr/bin/HeatSync" "$@"\n' > AppDir/AppRun
+    - chmod +x AppDir/AppRun
     # Download appimagetool and build AppImage (extract mode for Docker — no FUSE)
     - wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
     - chmod +x appimagetool-x86_64.AppImage
