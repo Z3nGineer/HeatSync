@@ -76,9 +76,8 @@ build-linux:
       cp dist/HeatSync AppDir/usr/bin/
       cp assets/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/heatsync.png
       cp assets/icon.png AppDir/heatsync.png
-    # Desktop entry
-    - printf '[Desktop Entry]\nType=Application\nName=HeatSync\nComment=Real-time system monitor\nExec=HeatSync\nIcon=heatsync\nCategories=System;Monitor;\nTerminal=false\n' > AppDir/heatsync.desktop
-    - cp AppDir/heatsync.desktop AppDir/usr/share/applications/
+    # Desktop entry (write to both locations with tee)
+    - printf '[Desktop Entry]\nType=Application\nName=HeatSync\nComment=Real-time system monitor\nExec=HeatSync\nIcon=heatsync\nCategories=System;Monitor;\nTerminal=false\n' | tee AppDir/usr/share/applications/heatsync.desktop > AppDir/heatsync.desktop
     # AppRun launcher
     - printf '#!/bin/bash\nSELF=$(readlink -f "$0")\nHERE=${SELF%%/*}\nexec "${HERE}/usr/bin/HeatSync" "$@"\n' > AppDir/AppRun
     - chmod +x AppDir/AppRun
