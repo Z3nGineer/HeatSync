@@ -20,7 +20,7 @@
 
 ![Docked Mode](assets/screenshot.png)
 
-![Dashboard](assets/screenshot-load.png)
+![Standard View](assets/screenshot-load.png)
 
 ![Compact Mode](assets/screenshot-compact.png)
 
