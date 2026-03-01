@@ -127,11 +127,10 @@ if not GPU_HANDLE and not _AMD_DEV and not _INTEL_DEV and IS_WINDOWS:
             _name = (_ctrl.Name or "").strip()
             if not _name or "Microsoft Basic" in _name:
                 continue
-            if any(k in _name for k in ("Intel", "AMD", "Radeon")):
-                GPU_NAME = _name
-                _WIN_GPU = True
-                print(f"[INFO] Windows GPU (WMI): {GPU_NAME}")
-                break
+            GPU_NAME = _name
+            _WIN_GPU = True
+            print(f"[INFO] Windows GPU (WMI): {GPU_NAME}")
+            break
     except Exception:
         pass
 

@@ -159,6 +159,15 @@ def s_gpu_power() -> float:
                     return float(f.read().strip()) / 1_000_000.0
             except Exception:
                 pass
+    if IS_WINDOWS and _WIN_GPU:
+        try:
+            import wmi  # type: ignore
+            w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
+            for s in w.Sensor():
+                if s.SensorType == "Power" and "GPU" in s.Name:
+                    return float(s.Value)
+        except Exception:
+            pass
     return 0.0
 
 
@@ -203,6 +212,17 @@ def s_gpu_vram():
                     return used >> 20, total >> 20, pct
                 except Exception:
                     pass
+    if IS_WINDOWS and _WIN_GPU:
+        try:
+            import wmi  # type: ignore
+            w = wmi.WMI()
+            for gpu in w.Win32_VideoController():
+                ram = getattr(gpu, "AdapterRAM", None)
+                if ram and int(ram) > 0:
+                    total_mb = int(ram) >> 20
+                    return 0, total_mb, 0.0
+        except Exception:
+            pass
     return 0, 0, 0
 
 def s_ram():
@@ -260,6 +280,18 @@ def s_nvme_temps() -> list[tuple[str, float]]:
     """Returns [(device_name, temp_C), ...] for NVMe/SSD drives from hwmon."""
     result = []
     if IS_WINDOWS:
+        try:
+            import wmi  # type: ignore
+            w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
+            for s in w.Sensor():
+                if s.SensorType == "Temperature" and s.Value and float(s.Value) > 0:
+                    name = (s.Name or "").lower()
+                    if any(k in name for k in ("nvme", "ssd", "drive", "disk")):
+                        result.append((s.Name, float(s.Value)))
+                        if len(result) >= 2:
+                            break
+        except Exception:
+            pass
         return result
     try:
         for hwmon in glob.glob("/sys/class/hwmon/hwmon*"):
@@ -319,11 +351,20 @@ def s_ram_info() -> tuple[str, int]:
                     if ram_type != "RAM" and ram_speed:
                         break
         else:
-            import winreg
-            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
-                                 r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
-            val, _ = winreg.QueryValueEx(key, "~MHz")
-            ram_speed = int(val)
+            try:
+                import wmi  # type: ignore
+                w = wmi.WMI()
+                for mem in w.Win32_PhysicalMemory():
+                    spd = getattr(mem, "Speed", None)
+                    if spd:
+                        ram_speed = int(spd)
+                    mt = getattr(mem, "SMBIOSMemoryType", None)
+                    _type_map = {20: "DDR", 21: "DDR2", 24: "DDR3", 26: "DDR4", 34: "DDR5"}
+                    if mt and int(mt) in _type_map:
+                        ram_type = _type_map[int(mt)]
+                    break
+            except Exception:
+                pass
     except Exception:
         pass
     _ram_info_cache = (ram_type, ram_speed)
@@ -389,6 +430,15 @@ def s_fans() -> "list[tuple[str, int]]":
                         result.append((f"{name}/{idx}", rpm))
                 except Exception:
                     pass
+    elif IS_WINDOWS:
+        try:
+            import wmi  # type: ignore
+            w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
+            for s in w.Sensor():
+                if s.SensorType == "Fan" and s.Value and int(float(s.Value)) > 0:
+                    result.append((s.Name or "Fan", int(float(s.Value))))
+        except Exception:
+            pass
     return result
 
 def s_cpu_per_core() -> "list[float]":
