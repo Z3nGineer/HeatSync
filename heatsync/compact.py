@@ -101,13 +101,13 @@ class CompactBar(QWidget):
             child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
     @staticmethod
-    def _temp_color(temp: float, temp_hi: float) -> str:
-        """Same white→red heat gradient as ArcGauge temp mode."""
-        pct = max(0.0, min(1.0, temp / max(temp_hi, 1.0)))
-        r = 255
-        g = int(255 * (1.0 - pct) ** 0.6)
-        b = int(255 * (1.0 - pct) ** 1.5)
-        return QColor(r, g, b).name()
+    def _temp_color(temp: float, warn: float, danger: float) -> str:
+        """White below warn, orange at warn, red at danger — matches gauge colors."""
+        if temp >= danger:
+            return _THEME.c_dang
+        if temp >= warn:
+            return _THEME.c_warn
+        return _THEME.txt_hi
 
     def _tick_clock(self):
         now  = datetime.now()
@@ -127,13 +127,13 @@ class CompactBar(QWidget):
         self._cpu_pct.setStyleSheet(f"color: {hi}; background: transparent;")
         self._cpu_tmp.setText(f"{cpu_temp:.0f}°C")
         self._cpu_tmp.setStyleSheet(
-            f"color: {self._temp_color(cpu_temp, 105)}; background: transparent;")
+            f"color: {self._temp_color(cpu_temp, 80, 95)}; background: transparent;")
 
         self._gpu_pct.setText(f"{gpu_pct:.0f}%")
         self._gpu_pct.setStyleSheet(f"color: {hi}; background: transparent;")
         self._gpu_tmp.setText(f"{gpu_temp:.0f}°C")
         self._gpu_tmp.setStyleSheet(
-            f"color: {self._temp_color(gpu_temp, 95)}; background: transparent;")
+            f"color: {self._temp_color(gpu_temp, 75, 90)}; background: transparent;")
 
         self._val_lbs[0].setText(f"{ram_used:.1f}/{ram_tot:.0f} GB")
         self._val_lbs[1].setText(f"↑{net_up:.1f}  ↓{net_down:.1f} Mb/s")

@@ -482,7 +482,7 @@ class MainWindow(QMainWindow):
         load_vals = [metrics.get(k, 0) for k in ("cpu_usage", "gpu_usage") if k in metrics]
         temp_vals_pct = [
             metrics.get("cpu_temp", 0) / 95.0 * 100,
-            metrics.get("gpu_temp", 0) / 88.0 * 100,
+            metrics.get("gpu_temp", 0) / 95.0 * 100,
         ]
         combined = max((load_vals or [0]) + temp_vals_pct)
         level = "danger" if combined > 90 else ("warn" if combined > 75 else "normal")
