@@ -38,17 +38,76 @@
 
 ## Features
 
-- **Circular arc gauges** -- 300 degree sweep per metric; color shifts white to orange to red with load
-- **Sparkline history** -- 90-point rolling graph per metric
-- **Vendor-aware labels** -- AMD, NVIDIA, and Intel names color-coded in the title bar
-- **Status bar** -- RAM, VRAM, CPU frequency, thread count, and disk usage
-- **10 built-in themes** -- Dark, Light, Synthwave, Midnight, Dracula, Nord, Solarized, Forest, Amber, AMOLED
-- **Compact mode** -- slim bar with all key stats for minimal screen footprint
-- **Dock mode** -- snaps to the top edge as a full-width bar; double-click to toggle
-- **Window memory** -- remembers position, size, and dock state between sessions
-- **System tray** -- no taskbar icon; hides to tray on close
-- **GPU auto-detection** -- NVIDIA via pynvml; AMD and Intel via sysfs (no extra drivers needed)
-- **Intel CPU temperature** -- via `coretemp` kernel driver, works out of the box
+### Gauges and Monitoring
+
+- **Four main gauges** -- CPU usage, CPU temperature, GPU usage, GPU temperature with animated 300-degree arc sweep
+- **Color-coded warnings** -- gauges shift from white to orange to red as values increase
+- **Sparkline graphs** -- 90-point rolling history chart below each gauge
+- **Per-core CPU usage** -- optional row showing individual core utilization
+- **Fan RPM display** -- optional row showing system fan speeds
+- **Network stats** -- optional panel showing upload/download speed in Mbps
+- **Battery monitoring** -- optional gauge for laptops with low-battery warnings
+- **NVMe/SSD temperatures** -- shows temps for up to 2 drives in the status bar
+- **GPU power draw** -- wattage and percentage of power limit
+
+### Status Bar
+
+- RAM usage with memory type and speed (e.g., DDR5 @ 6000 MT/s)
+- Swap usage
+- VRAM usage
+- CPU frequency and core count
+- Disk usage (largest mount point)
+- GPU core clock, memory clock, and power draw
+- NVMe/SSD temperatures
+
+### Compact Mode
+
+A slim bar showing all key stats in minimal screen space:
+- CPU usage + temp, GPU usage + temp
+- RAM, network speeds, disk usage
+- Live clock and date
+
+### Display Options
+
+- **Dock mode** -- double-click the title bar to snap to the top edge as a full-width bar
+- **Lock to top** -- keeps the window pinned to the top edge (re-enforces position automatically)
+- **Always on top** -- window stays above all other windows
+- **Opacity control** -- adjustable window transparency (20-100%)
+- **Window memory** -- remembers position, size, dock state, and mode between sessions
+
+### System Tray
+
+- Minimize to tray on close
+- Tray icon changes color based on system load (normal/warn/danger)
+- Show/hide toggle, always on top toggle
+- Copy snapshot -- copies formatted system stats to clipboard with timestamp
+- History window access
+
+### History Window
+
+- 3600-point rolling history charts for all metrics
+- Accessible from title bar or tray menu
+- Export history as PNG
+
+### Data Export
+
+- Optional CSV or NDJSON logging
+- Configurable export path and retention (1-24 hours)
+- Automatic flush every 60 seconds
+
+### Alerts
+
+- Per-metric temperature and usage thresholds
+- Individual metric enable/disable
+- Tray notifications with severity icons
+- 5-minute cooldown between repeated alerts
+- Triggers after 10 consecutive readings above threshold
+
+### Profiles
+
+- Save and load configuration presets
+- Includes theme, gauges, opacity, refresh rate, and all settings
+- Create, load, and delete profiles from the settings dialog
 
 ---
 
@@ -56,7 +115,7 @@
 
 ### Linux
 
-**AppImage** -- recommended, works on any distro (Ubuntu 18.04+, Fedora 32+, Arch, etc.):
+**AppImage** -- works on any distro (Ubuntu 18.04+, Fedora 32+, Arch, etc.):
 
 ```bash
 chmod +x HeatSync.AppImage
@@ -93,7 +152,7 @@ Download **[HeatSync.dmg](https://gitlab.com/vibesmiths/HeatSync/-/releases)**, 
 
 ## Themes
 
-HeatSync ships with 10 themes. Switch themes from the settings menu in the title bar.
+10 built-in themes. Switch from the settings menu in the title bar.
 
 | Theme | Style |
 |---|---|
@@ -110,6 +169,22 @@ HeatSync ships with 10 themes. Switch themes from the settings menu in the title
 
 ---
 
+## Settings
+
+The settings dialog has 7 tabs:
+
+| Tab | Options |
+|---|---|
+| **Appearance** | Theme, compact mode, opacity |
+| **Gauges** | Toggle CPU, GPU, network, battery, fan, per-core |
+| **Display** | Monitor selection, refresh rate (0.5s - 10s) |
+| **Startup** | Launch on login |
+| **Data** | CSV/NDJSON export, path, retention |
+| **Alerts** | Thresholds per metric, enable/disable |
+| **Profiles** | Save/load/delete configuration presets |
+
+---
+
 ## GPU Support
 
 | GPU | Driver | Notes |
@@ -117,6 +192,7 @@ HeatSync ships with 10 themes. Switch themes from the settings menu in the title
 | NVIDIA | pynvml | Requires `nvidia-utils` |
 | AMD | amdgpu sysfs | No extra drivers |
 | Intel Arc / iGPU | xe / i915 sysfs | No extra drivers |
+| Windows (non-NVIDIA) | WMI | Basic stats via Windows Management |
 
 When multiple GPUs are present, priority is NVIDIA then AMD then Intel.
 
@@ -127,13 +203,8 @@ When multiple GPUs are present, priority is NVIDIA then AMD then Intel.
 All release artifacts are GPG-signed and include SHA256 checksums.
 
 ```bash
-# Import the signing key
 gpg --import heatsync-signing-key.asc
-
-# Verify a binary
 gpg --verify HeatSync.AppImage.asc HeatSync.AppImage
-
-# Verify checksums
 sha256sum -c SHA256SUMS
 ```
 
