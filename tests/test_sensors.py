@@ -96,9 +96,10 @@ class TestGPUSensors:
     """Tests for GPU sensor functions."""
 
     def test_gpu_usage_nvidia(self):
-        with patch('HeatSync.GPU_HANDLE', Mock()):
-            with patch('pynvml.nvmlDeviceGetUtilizationRates') as mock_util:
-                mock_util.return_value = Mock(gpu=72.0)
+        mock_handle = Mock()
+        with patch('heatsync.sensors.GPU_HANDLE', mock_handle):
+            with patch('heatsync.sensors.pynvml') as mock_nvml:
+                mock_nvml.nvmlDeviceGetUtilizationRates.return_value = Mock(gpu=72.0)
                 from HeatSync import s_gpu_usage
                 assert s_gpu_usage() == 72.0
 
@@ -110,8 +111,11 @@ class TestGPUSensors:
             assert s_gpu_usage() == 0.0
 
     def test_gpu_temp_nvidia(self):
-        with patch('HeatSync.GPU_HANDLE', Mock()):
-            with patch('pynvml.nvmlDeviceGetTemperature', return_value=68.0):
+        mock_handle = Mock()
+        with patch('heatsync.sensors.GPU_HANDLE', mock_handle):
+            with patch('heatsync.sensors.pynvml') as mock_nvml:
+                mock_nvml.nvmlDeviceGetTemperature.return_value = 68.0
+                mock_nvml.NVML_TEMPERATURE_GPU = 0
                 from HeatSync import s_gpu_temp
                 assert s_gpu_temp() == 68.0
 
@@ -123,10 +127,12 @@ class TestGPUSensors:
             assert s_gpu_temp() == 0.0
 
     def test_gpu_vram_nvidia(self):
-        with patch('HeatSync.GPU_HANDLE', Mock()):
-            gpu_mem = Mock()
-            gpu_mem.used = 8589934592; gpu_mem.total = 10737418240
-            with patch('pynvml.nvmlDeviceGetMemoryInfo', return_value=gpu_mem):
+        mock_handle = Mock()
+        gpu_mem = Mock()
+        gpu_mem.used = 8589934592; gpu_mem.total = 10737418240
+        with patch('heatsync.sensors.GPU_HANDLE', mock_handle):
+            with patch('heatsync.sensors.pynvml') as mock_nvml:
+                mock_nvml.nvmlDeviceGetMemoryInfo.return_value = gpu_mem
                 from HeatSync import s_gpu_vram
                 used, total, pct = s_gpu_vram()
                 assert used == 8192
