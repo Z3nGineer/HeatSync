@@ -170,7 +170,7 @@ update-aur:
     - pacman -Sy --noconfirm openssh git
     - |
       mkdir -p ~/.ssh
-      echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+      cp "$AUR_SSH_PRIVATE_KEY" ~/.ssh/aur
       chmod 600 ~/.ssh/aur
       echo "Host aur.archlinux.org" >> ~/.ssh/config
       echo "  IdentityFile ~/.ssh/aur" >> ~/.ssh/config
