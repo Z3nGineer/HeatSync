@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://gitlab.com/vibesmiths/HeatSync/-/releases"><img src="https://gitlab.com/vibesmiths/HeatSync/-/badges/release.svg?style=for-the-badge" alt="Latest Release"></a>
   <a href="https://gitlab.com/vibesmiths/HeatSync/-/releases"><img src="https://img.shields.io/badge/download-latest-blue?style=for-the-badge" alt="Download"></a>
   <a href="https://aur.archlinux.org/packages/heatsync-bin"><img src="https://img.shields.io/badge/AUR-heatsync--bin-1793d1?style=for-the-badge&logo=archlinux&logoColor=white" alt="AUR"></a>
   <img src="https://img.shields.io/badge/python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+">
