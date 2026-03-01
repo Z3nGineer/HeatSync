@@ -69,6 +69,7 @@ build-linux:
         --hidden-import heatsync.compact
         --hidden-import heatsync.dialogs
         --hidden-import heatsync.autostart
+        --hidden-import heatsync.shortcuts
         HeatSync.py
     # Create AppDir structure
     - |
