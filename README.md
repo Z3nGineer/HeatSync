@@ -1,10 +1,19 @@
-# HeatSync
+<p align="center">
+  <img src="assets/icon.png" width="128" alt="HeatSync Logo">
+</p>
 
-![GitHub release](https://img.shields.io/github/v/release/crockednloaded/HeatSync)
+<h1 align="center">HeatSync</h1>
 
-**Real-time system monitor for Linux, Windows & macOS**
+<p align="center">
+  Real-time system monitor for Linux, Windows, and macOS
+</p>
 
-A dark-themed, frameless desktop widget built with PyQt6. Circular arc gauges, sparkline history graphs, and a live status bar with vendor-aware hardware labels. Sits in your system tray and stays out of your way.
+<p align="center">
+  <a href="https://gitlab.com/vibesmiths/HeatSync/-/releases"><img src="https://img.shields.io/badge/download-latest-blue?style=for-the-badge" alt="Download"></a>
+  <a href="https://aur.archlinux.org/packages/heatsync-bin"><img src="https://img.shields.io/badge/AUR-heatsync--bin-1793d1?style=for-the-badge&logo=archlinux&logoColor=white" alt="AUR"></a>
+  <img src="https://img.shields.io/badge/python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License">
+</p>
 
 ---
 
@@ -12,30 +21,34 @@ A dark-themed, frameless desktop widget built with PyQt6. Circular arc gauges, s
 
 ![HeatSync under load](assets/screenshot-load.png)
 
+![HeatSync compact mode](assets/screenshot-compact.png)
+
 ---
 
 ## Download
 
 | Platform | Download | |
 |---|---|---|
-| **Linux** | [HeatSync.AppImage](https://github.com/crockednloaded/HeatSync/releases/latest) | Works on any distro |
-| **Linux (Arch)** | `yay -S heatsync-bin` | AUR package |
-| **Windows** | [HeatSync.exe](https://github.com/crockednloaded/HeatSync/releases/latest) | No install needed |
-| **macOS** | [HeatSync.dmg](https://github.com/crockednloaded/HeatSync/releases/latest) | Drag to Applications |
+| **Linux** | [HeatSync.AppImage](https://gitlab.com/vibesmiths/HeatSync/-/releases) | Works on any distro |
+| **Linux (Arch)** | `paru -S heatsync-bin` | AUR package |
+| **Windows** | [HeatSync.exe](https://gitlab.com/vibesmiths/HeatSync/-/releases) | No install needed |
+| **macOS** | [HeatSync.dmg](https://gitlab.com/vibesmiths/HeatSync/-/releases) | Drag to Applications |
 
 ---
 
 ## Features
 
-- **Circular arc gauges** — 300° sweep per metric; color shifts white → orange → red with load
-- **Sparkline history** — 90-point rolling graph per metric
-- **Vendor-aware labels** — AMD, NVIDIA, and Intel names color-coded in the title bar
-- **Status bar** — RAM, VRAM, CPU frequency, thread count, and disk usage
-- **Dock mode** — snaps to the top edge as a full-width bar; double-click to toggle
-- **Window memory** — remembers position, size, and dock state between sessions
-- **System tray** — no taskbar icon; hides to tray on close
-- **GPU auto-detection** — NVIDIA via pynvml; AMD and Intel via sysfs (no extra drivers needed)
-- **Intel CPU temperature** — via `coretemp` kernel driver, works out of the box
+- **Circular arc gauges** -- 300 degree sweep per metric; color shifts white to orange to red with load
+- **Sparkline history** -- 90-point rolling graph per metric
+- **Vendor-aware labels** -- AMD, NVIDIA, and Intel names color-coded in the title bar
+- **Status bar** -- RAM, VRAM, CPU frequency, thread count, and disk usage
+- **10 built-in themes** -- Dark, Light, Synthwave, Midnight, Dracula, Nord, Solarized, Forest, Amber, AMOLED
+- **Compact mode** -- slim bar with all key stats for minimal screen footprint
+- **Dock mode** -- snaps to the top edge as a full-width bar; double-click to toggle
+- **Window memory** -- remembers position, size, and dock state between sessions
+- **System tray** -- no taskbar icon; hides to tray on close
+- **GPU auto-detection** -- NVIDIA via pynvml; AMD and Intel via sysfs (no extra drivers needed)
+- **Intel CPU temperature** -- via `coretemp` kernel driver, works out of the box
 
 ---
 
@@ -43,7 +56,7 @@ A dark-themed, frameless desktop widget built with PyQt6. Circular arc gauges, s
 
 ### Linux
 
-**AppImage** — recommended, works on any distro (Ubuntu 18.04+, Fedora 32+, Arch, etc.):
+**AppImage** -- recommended, works on any distro (Ubuntu 18.04+, Fedora 32+, Arch, etc.):
 
 ```bash
 chmod +x HeatSync.AppImage
@@ -53,13 +66,13 @@ chmod +x HeatSync.AppImage
 **Arch Linux / AUR:**
 
 ```bash
-yay -S heatsync-bin
+paru -S heatsync-bin
 ```
 
 **From source:**
 
 ```bash
-git clone https://github.com/crockednloaded/HeatSync.git
+git clone https://gitlab.com/vibesmiths/HeatSync.git
 cd HeatSync
 bash install.sh
 ```
@@ -68,13 +81,32 @@ bash install.sh
 
 ### Windows
 
-Download **[HeatSync.exe](https://github.com/crockednloaded/HeatSync/releases/latest)** and run it — no installation required.
+Download **[HeatSync.exe](https://gitlab.com/vibesmiths/HeatSync/-/releases)** and run it -- no installation required.
 
 > CPU temperature on Windows requires [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running in the background.
 
 ### macOS
 
-Download **[HeatSync.dmg](https://github.com/crockednloaded/HeatSync/releases/latest)**, open it, and drag HeatSync.app to your Applications folder.
+Download **[HeatSync.dmg](https://gitlab.com/vibesmiths/HeatSync/-/releases)**, open it, and drag HeatSync.app to your Applications folder.
+
+---
+
+## Themes
+
+HeatSync ships with 10 themes. Switch themes from the settings menu in the title bar.
+
+| Theme | Style |
+|---|---|
+| Dark | Default dark theme |
+| Light | Clean light mode |
+| Synthwave | Retro neon purple/pink |
+| Midnight | Deep blue/black |
+| Dracula | Classic Dracula palette |
+| Nord | Arctic, north-bluish |
+| Solarized | Solarized Dark |
+| Forest | Earthy greens |
+| Amber | Warm amber/orange |
+| AMOLED | Pure black for OLED displays |
 
 ---
 
@@ -86,7 +118,7 @@ Download **[HeatSync.dmg](https://github.com/crockednloaded/HeatSync/releases/la
 | AMD | amdgpu sysfs | No extra drivers |
 | Intel Arc / iGPU | xe / i915 sysfs | No extra drivers |
 
-When multiple GPUs are present, priority is NVIDIA → AMD → Intel.
+When multiple GPUs are present, priority is NVIDIA then AMD then Intel.
 
 ---
 
@@ -103,6 +135,15 @@ gpg --verify HeatSync.AppImage.asc HeatSync.AppImage
 
 # Verify checksums
 sha256sum -c SHA256SUMS
+```
+
+---
+
+## Running Tests
+
+```bash
+source .venv/bin/activate
+pytest tests/ -v
 ```
 
 ---

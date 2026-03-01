@@ -76,13 +76,13 @@ else
 fi
 
 if [ -n "$DL_CMD" ]; then
-    API_URL="https://api.github.com/repos/crockednloaded/HeatSync/releases/latest"
+    API_URL="https://gitlab.com/api/v4/projects/vibesmiths%2FHeatSync/releases/permalink/latest"
     APPIMAGE_URL=$(${DL_CMD} "$API_URL" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-for a in data.get('assets', []):
-    if a['name'].endswith('.AppImage'):
-        print(a['browser_download_url'])
+for link in data.get('assets', {}).get('links', []):
+    if 'AppImage' in link.get('name', ''):
+        print(link['direct_asset_url'])
         break
 " 2>/dev/null)
 
