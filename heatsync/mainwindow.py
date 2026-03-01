@@ -510,12 +510,12 @@ class MainWindow(QMainWindow):
                     self._alert_ticks[key] = self._alert_ticks.get(key, 0) + 1
                 else:
                     self._alert_ticks[key] = 0
-                if (self._alert_ticks.get(key, 0) >= 10 and
-                        now - self._alert_notified.get(key, 0) > 300):
+                if (self._alert_ticks.get(key, 0) >= 30 and
+                        now - self._alert_notified.get(key, 0) > 600):
                     self._alert_notified[key] = now
                     self._tray.showMessage(
                         "HeatSync Alert",
-                        f"{label} has been critically high for 10+ seconds",
+                        f"{label} has been critically high for 30+ seconds",
                         QSystemTrayIcon.MessageIcon.Warning, 5000)
 
     # ── Settings / History dialogs ─────────────────────────────────────────

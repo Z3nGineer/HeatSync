@@ -15,6 +15,7 @@ from .constants import (
     GPU_HANDLE, _AMD_DEV, _AMD_HWMON, _INTEL_DEV, _INTEL_HWMON, _WIN_GPU,
     pynvml,
 )
+from . import lhm
 
 # Prime the CPU percent measurement
 psutil.cpu_percent()
@@ -25,6 +26,9 @@ def s_cpu_usage() -> float:
 
 def s_cpu_temp() -> float:
     if IS_WINDOWS:
+        val = lhm.cpu_temp()
+        if val is not None:
+            return val
         try:
             import wmi  # type: ignore
             w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
@@ -90,6 +94,9 @@ def s_gpu_usage() -> float:
                 pass
         return 0.0
     if IS_WINDOWS and _WIN_GPU:
+        val = lhm.gpu_usage()
+        if val is not None:
+            return val
         try:
             import wmi  # type: ignore
             w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
@@ -135,6 +142,9 @@ def s_gpu_temp() -> float:
         except Exception:
             pass
     if IS_WINDOWS and _WIN_GPU:
+        val = lhm.gpu_temp()
+        if val is not None:
+            return val
         try:
             import wmi  # type: ignore
             w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
@@ -160,6 +170,9 @@ def s_gpu_power() -> float:
             except Exception:
                 pass
     if IS_WINDOWS and _WIN_GPU:
+        val = lhm.gpu_power()
+        if val is not None:
+            return val
         try:
             import wmi  # type: ignore
             w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
@@ -280,6 +293,9 @@ def s_nvme_temps() -> list[tuple[str, float]]:
     """Returns [(device_name, temp_C), ...] for NVMe/SSD drives from hwmon."""
     result = []
     if IS_WINDOWS:
+        result = lhm.nvme_temps()
+        if result:
+            return result
         try:
             import wmi  # type: ignore
             w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
@@ -431,14 +447,16 @@ def s_fans() -> "list[tuple[str, int]]":
                 except Exception:
                     pass
     elif IS_WINDOWS:
-        try:
-            import wmi  # type: ignore
-            w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
-            for s in w.Sensor():
-                if s.SensorType == "Fan" and s.Value and int(float(s.Value)) > 0:
-                    result.append((s.Name or "Fan", int(float(s.Value))))
-        except Exception:
-            pass
+        result = lhm.fans()
+        if not result:
+            try:
+                import wmi  # type: ignore
+                w = wmi.WMI(namespace="root\\LibreHardwareMonitor")
+                for s in w.Sensor():
+                    if s.SensorType == "Fan" and s.Value and int(float(s.Value)) > 0:
+                        result.append((s.Name or "Fan", int(float(s.Value))))
+            except Exception:
+                pass
     return result
 
 def s_cpu_per_core() -> "list[float]":

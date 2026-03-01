@@ -1,5 +1,4 @@
 stages:
-  - version
   - quality
   - build
   - release
@@ -9,24 +8,7 @@ variables:
   PACKAGE_NAME: "HeatSync"
   PYTHON_VERSION: "3.11"
 
-# ── Determine version ─────────────────────────────────────────────────────────
-versioner:
-  stage: version
-  image: alpine:latest
-  script:
-    - |
-      if [ -n "$VERSION_OVERRIDE" ]; then
-        VERSION="$VERSION_OVERRIDE"
-      else
-        VERSION=$(cat VERSION)
-      fi
-      echo "VERSION=$VERSION" >> variables.env
-      echo "Version: $VERSION"
-  artifacts:
-    reports:
-      dotenv: variables.env
-
-# ── Tests ─────────────────────────────────────────────────────────────────────
+# ── Tests — runs on every push ───────────────────────────────────────────────
 test:
   stage: quality
   image: python:${PYTHON_VERSION}
@@ -38,49 +20,65 @@ test:
         libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-randr0
         libxcb-xinerama0
     - pip install --upgrade pip
-    - pip install -r requirements.txt
-    - pip install pytest pytest-cov pytest-mock
+    - pip install PyQt6 psutil nvidia-ml-py pytest pytest-cov pytest-mock Pillow
   script:
     - xvfb-run -a pytest tests/ -v --tb=short --cov=heatsync --cov-report=term
   coverage: '/^TOTAL.*\s+(\d+%)$/'
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
 
-# ── Lint ──────────────────────────────────────────────────────────────────────
+# ── Lint — runs on every push ────────────────────────────────────────────────
 lint:
   stage: quality
   image: python:${PYTHON_VERSION}
   before_script:
-    - pip install --upgrade pip
-    - pip install pylint
-    - pip install -r requirements.txt
+    - pip install --upgrade pip pylint PyQt6 psutil nvidia-ml-py
   script:
     - pylint heatsync/ --exit-zero --output-format=text
   allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
 
-# ── Build Linux AppImage ──────────────────────────────────────────────────────
+# ── Build Linux AppImage — runs on version tags ─────────────────────────────
 build-linux:
   stage: build
   image: python:${PYTHON_VERSION}
-  needs:
-    - job: versioner
-      artifacts: true
   before_script:
     - apt-get update && apt-get install -y
         libfuse2 libxkbcommon0 libxkbcommon-x11-0
         libdbus-1-3 libharfbuzz0b libfontconfig1
-        xdotool file wget
+        libgl1 libegl1 libglib2.0-0
+        file wget desktop-file-utils
     - pip install --upgrade pip
-    - pip install -r requirements.txt pyinstaller
+    - pip install PyQt6 psutil nvidia-ml-py pyinstaller
   script:
-    - |
-      sed -i "s/return \"v[^\"]*\"  # fallback/return \"v${VERSION}\"  # fallback/" heatsync/constants.py || true
-    - pyinstaller --onefile --add-data "assets:assets" --add-data "VERSION:." HeatSync.py
-    - |
-      wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-      chmod +x linuxdeploy-x86_64.AppImage
+    # Build single-file executable
+    - pyinstaller --onefile --name HeatSync
+        --add-data "assets:assets"
+        --add-data "VERSION:."
+        --hidden-import heatsync
+        --hidden-import heatsync.mainwindow
+        --hidden-import heatsync.sensors
+        --hidden-import heatsync.constants
+        --hidden-import heatsync.lhm
+        --hidden-import heatsync.widgets
+        --hidden-import heatsync.settings
+        --hidden-import heatsync.theme
+        --hidden-import heatsync.titlebar
+        --hidden-import heatsync.statusbar
+        --hidden-import heatsync.compact
+        --hidden-import heatsync.dialogs
+        --hidden-import heatsync.autostart
+        HeatSync.py
+    # Create AppDir structure
     - |
       mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
       cp dist/HeatSync AppDir/usr/bin/
-      cat > AppDir/usr/share/applications/heatsync.desktop << 'DESKTOP'
+      cp assets/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/heatsync.png
+      cp assets/icon.png AppDir/heatsync.png
+    # Desktop entry (no leading whitespace)
+    - |
+      cat > AppDir/heatsync.desktop << 'EOF'
       [Desktop Entry]
       Type=Application
       Name=HeatSync
@@ -89,49 +87,66 @@ build-linux:
       Icon=heatsync
       Categories=System;Monitor;
       Terminal=false
-      DESKTOP
-      cp assets/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/heatsync.png
-    - ./linuxdeploy-x86_64.AppImage --appdir AppDir --executable AppDir/usr/bin/HeatSync --desktop-file AppDir/usr/share/applications/heatsync.desktop --output appimage
-    - mv HeatSync*.AppImage HeatSync.AppImage
+      EOF
+      cp AppDir/heatsync.desktop AppDir/usr/share/applications/
+    # AppRun launcher
+    - |
+      cat > AppDir/AppRun << 'APPRUN'
+      #!/bin/bash
+      SELF=$(readlink -f "$0")
+      HERE=${SELF%/*}
+      exec "${HERE}/usr/bin/HeatSync" "$@"
+      APPRUN
+      chmod +x AppDir/AppRun
+    # Download appimagetool and build AppImage (extract mode for Docker — no FUSE)
+    - wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+    - chmod +x appimagetool-x86_64.AppImage
+    - ./appimagetool-x86_64.AppImage --appimage-extract
+    - ARCH=x86_64 ./squashfs-root/AppRun AppDir HeatSync.AppImage
   artifacts:
     paths:
       - HeatSync.AppImage
-    expire_in: 7 days
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+/
 
-# ── Build Windows EXE ─────────────────────────────────────────────────────────
+# ── Build Windows EXE — requires self-hosted Windows runner ─────────────────
+# To enable: set up a Windows runner with tag "windows" in your GitLab project.
+# See: https://docs.gitlab.com/runner/install/windows.html
 build-windows:
   stage: build
   tags:
     - windows
-  needs:
-    - job: versioner
-      artifacts: true
   before_script:
     - pip install --upgrade pip
     - pip install -r requirements.txt pyinstaller
   script:
-    - sed -i "s/return \"v[^\"]*\"  # fallback/return \"v${VERSION}\"  # fallback/" heatsync/constants.py || true
-    - pyinstaller --onefile --windowed --name HeatSync --icon=assets/icon.png --add-data "assets;assets" --add-data "VERSION;." HeatSync.py
+    - pyinstaller --onefile --windowed --name HeatSync
+        --icon=assets/icon.png
+        --add-data "assets;assets"
+        --add-data "VERSION;."
+        HeatSync.py
   artifacts:
     paths:
       - dist/HeatSync.exe
-    expire_in: 7 days
-  when: manual
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+/
+      when: manual
   allow_failure: true
 
-# ── Build macOS DMG ───────────────────────────────────────────────────────────
+# ── Build macOS DMG — requires self-hosted macOS runner ─────────────────────
+# To enable: set up a macOS runner with tag "macos" in your GitLab project.
+# See: https://docs.gitlab.com/runner/install/osx.html
 build-macos:
   stage: build
   tags:
     - macos
-  needs:
-    - job: versioner
-      artifacts: true
   before_script:
     - pip install --upgrade pip
-    - pip install -r requirements.txt pyinstaller
+    - pip install PyQt6 psutil nvidia-ml-py pyinstaller
   script:
-    - sed -i '' "s/return \"v[^\"]*\"  # fallback/return \"v${VERSION}\"  # fallback/" heatsync/constants.py || true
+    # Create icns icon from png
     - |
       mkdir -p HeatSync.iconset
       sips -z 16  16  assets/icon.png --out HeatSync.iconset/icon_16x16.png
@@ -142,31 +157,35 @@ build-macos:
       sips -z 512 512 assets/icon.png --out HeatSync.iconset/icon_256x256@2x.png
       sips -z 512 512 assets/icon.png --out HeatSync.iconset/icon_512x512.png
       iconutil -c icns HeatSync.iconset -o assets/icon.icns
-    - pyinstaller --windowed --name HeatSync --icon assets/icon.icns --add-data "assets:assets" --add-data "VERSION:." HeatSync.py
+    - pyinstaller --windowed --name HeatSync
+        --icon assets/icon.icns
+        --add-data "assets:assets"
+        --add-data "VERSION:."
+        HeatSync.py
     - hdiutil create -volname "HeatSync" -srcfolder dist/HeatSync.app -ov -format UDZO HeatSync.dmg
   artifacts:
     paths:
       - HeatSync.dmg
-    expire_in: 7 days
-  when: manual
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+/
+      when: manual
   allow_failure: true
 
-# ── Create GitLab Release ─────────────────────────────────────────────────────
+# ── Create GitLab Release ───────────────────────────────────────────────────
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   needs:
-    - job: versioner
-      artifacts: true
     - job: build-linux
       artifacts: true
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
   before_script:
     - apk add --no-cache coreutils gnupg
   script:
+    - VERSION=$(cat VERSION)
+    - echo "Creating release v${VERSION}"
+    # GPG sign if key is available
     - |
-      # GPG sign if key is available
       if [ -n "$GPG_PRIVATE_KEY" ]; then
         echo "$GPG_PRIVATE_KEY" | gpg --batch --import
         echo "$GPG_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --detach-sign --armor HeatSync.AppImage
@@ -174,10 +193,10 @@ release:
     - sha256sum HeatSync.AppImage > SHA256SUMS
     - cat SHA256SUMS
   release:
-    tag_name: "v${VERSION}"
-    name: "HeatSync v${VERSION}"
+    tag_name: "$CI_COMMIT_TAG"
+    name: "HeatSync $CI_COMMIT_TAG"
     description: |
-      ## HeatSync v${VERSION}
+      ## HeatSync $CI_COMMIT_TAG
 
       Real-time system monitor for Linux, Windows, and macOS.
 
@@ -210,19 +229,18 @@ release:
       - HeatSync.AppImage
       - HeatSync.AppImage.asc
       - SHA256SUMS
-    expire_in: 30 days
+    expire_in: 90 days
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+/
 
-# ── Update AUR package ────────────────────────────────────────────────────────
+# ── Update AUR package ─────────────────────────────────────────────────────
+# Requires CI variable: AUR_SSH_PRIVATE_KEY (SSH key registered on AUR)
 update-aur:
   stage: aur
   image: archlinux:latest
   needs:
-    - job: versioner
-      artifacts: true
     - job: release
       artifacts: true
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
   before_script:
     - pacman -Sy --noconfirm openssh git
     - |
@@ -236,6 +254,7 @@ update-aur:
       git config --global user.email "vibesmiths@users.noreply.gitlab.com"
       git config --global user.name "VibeSmiths"
   script:
+    - VERSION=$(cat VERSION)
     - |
       SHA=$(sha256sum HeatSync.AppImage | awk '{print $1}')
       echo "AppImage SHA256: $SHA"
@@ -255,3 +274,5 @@ update-aur:
       git add PKGBUILD .SRCINFO
       git commit -m "Update to v${VERSION}" || echo "No changes to commit"
       git push
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+/

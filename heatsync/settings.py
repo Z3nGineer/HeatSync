@@ -42,8 +42,8 @@ _DEFAULT_SETTINGS: dict = {
     },
     "alert_thresholds": {
         "cpu_temp":  95,
-        "gpu_temp":  88,
-        "cpu_usage": 90,
+        "gpu_temp":  95,
+        "cpu_usage": 95,
         "gpu_usage": 100,  # effectively off — GPU usage at 100% is normal
     },
     "alerts_enabled": {
