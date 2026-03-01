@@ -141,20 +141,58 @@ bash install.sh
 
 ### Windows
 
-```bash
+You'll need **Python 3.10 or newer** and **Git** installed first.
+
+1. **Install Python** -- download from [python.org](https://www.python.org/downloads/). During install, check **"Add python.exe to PATH"** (important!).
+
+2. **Install Git** -- download from [git-scm.com](https://git-scm.com/downloads/win). Use the default options.
+
+3. **Open a terminal** -- press `Win + R`, type `cmd`, and hit Enter.
+
+4. **Run these commands** one at a time:
+
+```
 git clone https://gitlab.com/vibesmiths/HeatSync.git
 cd HeatSync
 install.bat
+```
+
+5. **Launch HeatSync** -- double-click `run.bat` in the HeatSync folder, or run:
+
+```
+.venv\Scripts\python.exe HeatSync.py
 ```
 
 > CPU temperature on Windows requires [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running in the background.
 
 ### macOS
 
+You'll need **Python 3.10 or newer** and **Git** installed first.
+
+1. **Install Homebrew** (if you don't have it) -- open Terminal and paste:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+2. **Install Python and Git:**
+
+```bash
+brew install python git
+```
+
+3. **Download and install HeatSync:**
+
 ```bash
 git clone https://gitlab.com/vibesmiths/HeatSync.git
 cd HeatSync
 bash install.sh
+```
+
+4. **Launch HeatSync:**
+
+```bash
+bash run.sh
 ```
 
 ---
