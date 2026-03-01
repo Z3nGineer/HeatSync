@@ -30,10 +30,10 @@
 
 | Platform | Download | |
 |---|---|---|
-| **Linux** | [HeatSync.AppImage](https://gitlab.com/vibesmiths/HeatSync/-/releases) | Works on any distro |
+| **Linux** | [HeatSync.AppImage](https://gitlab.com/vibesmiths/HeatSync/-/releases/permalink/latest/downloads/HeatSync.AppImage) | Works on any distro |
 | **Linux (Arch)** | `paru -S heatsync-bin` | AUR package |
-| **Windows** | [HeatSync.exe](https://gitlab.com/vibesmiths/HeatSync/-/releases) | No install needed |
-| **macOS** | [HeatSync.dmg](https://gitlab.com/vibesmiths/HeatSync/-/releases) | Drag to Applications |
+| **Windows** | [Run from source](#windows) | Requires Python 3.10+ |
+| **macOS** | [Run from source](#macos) | Requires Python 3.10+ |
 
 ---
 
@@ -141,13 +141,21 @@ bash install.sh
 
 ### Windows
 
-Download **[HeatSync.exe](https://gitlab.com/vibesmiths/HeatSync/-/releases)** and run it -- no installation required.
+```bash
+git clone https://gitlab.com/vibesmiths/HeatSync.git
+cd HeatSync
+install.bat
+```
 
 > CPU temperature on Windows requires [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running in the background.
 
 ### macOS
 
-Download **[HeatSync.dmg](https://gitlab.com/vibesmiths/HeatSync/-/releases)**, open it, and drag HeatSync.app to your Applications folder.
+```bash
+git clone https://gitlab.com/vibesmiths/HeatSync.git
+cd HeatSync
+bash install.sh
+```
 
 ---
 

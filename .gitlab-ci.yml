@@ -86,74 +86,21 @@ build-linux:
     - chmod +x appimagetool-x86_64.AppImage
     - ./appimagetool-x86_64.AppImage --appimage-extract
     - ARCH=x86_64 ./squashfs-root/AppRun AppDir HeatSync.AppImage
+    # Export job ID so the release job can link to the correct artifact
+    - echo "BUILD_LINUX_JOB_ID=$CI_JOB_ID" > build_linux.env
   artifacts:
     paths:
       - HeatSync.AppImage
-    expire_in: 30 days
+    reports:
+      dotenv: build_linux.env
+    expire_in: never
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+/
 
-# ── Build Windows EXE — requires self-hosted Windows runner ─────────────────
-# To enable: set up a Windows runner with tag "windows" in your GitLab project.
-# See: https://docs.gitlab.com/runner/install/windows.html
-build-windows:
-  stage: build
-  tags:
-    - windows
-  before_script:
-    - pip install --upgrade pip
-    - pip install -r requirements.txt pyinstaller
-  script:
-    - pyinstaller --onefile --windowed --name HeatSync
-        --icon=assets/icon.png
-        --add-data "assets;assets"
-        --add-data "VERSION;."
-        HeatSync.py
-  artifacts:
-    paths:
-      - dist/HeatSync.exe
-    expire_in: 30 days
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+/
-      when: manual
-  allow_failure: true
-
-# ── Build macOS DMG — requires self-hosted macOS runner ─────────────────────
-# To enable: set up a macOS runner with tag "macos" in your GitLab project.
-# See: https://docs.gitlab.com/runner/install/osx.html
-build-macos:
-  stage: build
-  tags:
-    - macos
-  before_script:
-    - pip install --upgrade pip
-    - pip install PyQt6 psutil nvidia-ml-py pyinstaller
-  script:
-    # Create icns icon from png
-    - |
-      mkdir -p HeatSync.iconset
-      sips -z 16  16  assets/icon.png --out HeatSync.iconset/icon_16x16.png
-      sips -z 32  32  assets/icon.png --out HeatSync.iconset/icon_16x16@2x.png
-      sips -z 128 128 assets/icon.png --out HeatSync.iconset/icon_128x128.png
-      sips -z 256 256 assets/icon.png --out HeatSync.iconset/icon_128x128@2x.png
-      sips -z 256 256 assets/icon.png --out HeatSync.iconset/icon_256x256.png
-      sips -z 512 512 assets/icon.png --out HeatSync.iconset/icon_256x256@2x.png
-      sips -z 512 512 assets/icon.png --out HeatSync.iconset/icon_512x512.png
-      iconutil -c icns HeatSync.iconset -o assets/icon.icns
-    - pyinstaller --windowed --name HeatSync
-        --icon assets/icon.icns
-        --add-data "assets:assets"
-        --add-data "VERSION:."
-        HeatSync.py
-    - hdiutil create -volname "HeatSync" -srcfolder dist/HeatSync.app -ov -format UDZO HeatSync.dmg
-  artifacts:
-    paths:
-      - HeatSync.dmg
-    expire_in: 30 days
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+/
-      when: manual
-  allow_failure: true
+# ── Windows / macOS builds ──────────────────────────────────────────────────
+# PyInstaller cannot cross-compile, and GitLab free tier has no Windows/macOS
+# runners. Windows and macOS users should run from source using install.bat or
+# install.sh respectively. Self-hosted runners can be added later if needed.
 
 # ── Create GitLab Release ───────────────────────────────────────────────────
 release:
@@ -175,44 +122,39 @@ release:
       fi
     - sha256sum HeatSync.AppImage > SHA256SUMS
     - cat SHA256SUMS
-  release:
-    tag_name: "$CI_COMMIT_TAG"
-    name: "HeatSync $CI_COMMIT_TAG"
-    description: |
-      ## HeatSync $CI_COMMIT_TAG
-
-      Real-time system monitor for Linux, Windows, and macOS.
+    # Use release-cli create so we can reference $BUILD_LINUX_JOB_ID at runtime
+    - |
+      release-cli create \
+        --name "HeatSync $CI_COMMIT_TAG" \
+        --tag-name "$CI_COMMIT_TAG" \
+        --description "## HeatSync $CI_COMMIT_TAG
 
       ### Downloads
 
       **Linux (AppImage):**
-      ```bash
+      \`\`\`bash
       chmod +x HeatSync.AppImage
       ./HeatSync.AppImage
-      ```
+      \`\`\`
 
       **Arch Linux (AUR):**
-      ```bash
+      \`\`\`bash
       paru -S heatsync-bin
-      ```
+      \`\`\`
 
       **From source:**
-      ```bash
+      \`\`\`bash
       git clone https://gitlab.com/vibesmiths/HeatSync.git
       cd HeatSync && bash install.sh
-      ```
-    assets:
-      links:
-        - name: "HeatSync.AppImage"
-          url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/HeatSync.AppImage"
-        - name: "SHA256SUMS"
-          url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/SHA256SUMS"
+      \`\`\`" \
+        --assets-link "{\"name\":\"HeatSync.AppImage\",\"url\":\"${CI_PROJECT_URL}/-/jobs/${BUILD_LINUX_JOB_ID}/artifacts/raw/HeatSync.AppImage\",\"filepath\":\"/HeatSync.AppImage\",\"link_type\":\"package\"}" \
+        --assets-link "{\"name\":\"SHA256SUMS\",\"url\":\"${CI_PROJECT_URL}/-/jobs/${BUILD_LINUX_JOB_ID}/artifacts/raw/SHA256SUMS\",\"filepath\":\"/SHA256SUMS\",\"link_type\":\"other\"}"
   artifacts:
     paths:
       - HeatSync.AppImage
       - HeatSync.AppImage.asc
       - SHA256SUMS
-    expire_in: 90 days
+    expire_in: never
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+/
 
