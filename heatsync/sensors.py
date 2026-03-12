@@ -24,6 +24,58 @@ psutil.cpu_percent()
 def s_cpu_usage() -> float:
     return psutil.cpu_percent()
 
+_CPU_HWMON: str | None = None  # cached path to CPU temp hwmon directory
+
+def _find_cpu_hwmon() -> str | None:
+    """Find the hwmon directory for the CPU temperature sensor via sysfs."""
+    global _CPU_HWMON
+    if _CPU_HWMON is not None:
+        # Verify cached path is still valid
+        if os.path.isdir(_CPU_HWMON):
+            return _CPU_HWMON
+        _CPU_HWMON = None
+    _KNOWN_CPU_DRIVERS = ("k10temp", "zenpower", "coretemp", "cpu_thermal", "acpitz")
+    for hwmon in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+        try:
+            with open(os.path.join(hwmon, "name")) as f:
+                name = f.read().strip()
+        except OSError:
+            continue
+        if name in _KNOWN_CPU_DRIVERS:
+            _CPU_HWMON = hwmon
+            return hwmon
+    return None
+
+
+def _read_cpu_temp_sysfs() -> float | None:
+    """Read CPU temp directly from sysfs hwmon, bypassing psutil."""
+    hwmon = _find_cpu_hwmon()
+    if hwmon is None:
+        return None
+    # Try labeled temp inputs first (Tctl, Tdie, Package id 0, etc.)
+    _GOOD_LABELS = {"Tctl", "Tdie", "Tccd1", "Package id 0", "Physical id 0"}
+    for temp_file in sorted(glob.glob(os.path.join(hwmon, "temp*_input"))):
+        label_file = temp_file.replace("_input", "_label")
+        try:
+            with open(label_file) as f:
+                label = f.read().strip()
+        except OSError:
+            label = ""
+        if label in _GOOD_LABELS:
+            try:
+                with open(temp_file) as f:
+                    return float(f.read().strip()) / 1000.0
+            except (OSError, ValueError):
+                continue
+    # Fallback: read temp1_input (the first/default sensor)
+    try:
+        with open(os.path.join(hwmon, "temp1_input")) as f:
+            return float(f.read().strip()) / 1000.0
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def s_cpu_temp() -> float:
     if IS_WINDOWS:
         val = lhm.cpu_temp()
@@ -38,6 +90,11 @@ def s_cpu_temp() -> float:
         except Exception:
             pass
         return 0.0
+    # Primary: direct sysfs read (most reliable on Linux)
+    val = _read_cpu_temp_sysfs()
+    if val is not None:
+        return val
+    # Fallback: psutil
     try:
         temps = psutil.sensors_temperatures()
         if not temps:
