@@ -50,28 +50,37 @@ class ArcGauge(QWidget):
         self.setMinimumSize(190, 210)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        t = QTimer(self); t.timeout.connect(self._tick); t.start(15)
+        self._anim = QTimer(self); self._anim.timeout.connect(self._tick); self._anim.setInterval(30)
+        self._face_cache = None  # QPixmap cache for static gauge face
+        self._face_cache_key = None  # (width, height, compact, is_light) for invalidation
 
     def set_value(self, v):
         self._target = max(self._lo, min(self._hi, v))
+        if not self._anim.isActive():
+            self._anim.start()
 
     def set_color(self, hex_color: str):
         self._col = QColor(hex_color)
+        self._face_cache = None
         self.update()
 
     def set_compact(self, compact: bool):
         self._compact = compact
+        self._face_cache = None
         self.setMinimumSize(120 if compact else 190, 130 if compact else 210)
         self.updateGeometry()
 
     def _tick(self):
         delta = self._target - self._cur
-        if abs(delta) > 0.05:
-            self._cur += delta * 0.18
+        if abs(delta) > 0.3:
+            self._cur += delta * 0.28
             self.update()
         elif self._cur != self._target:
             self._cur = self._target
             self.update()
+            self._anim.stop()
+        else:
+            self._anim.stop()
 
     @staticmethod
     def _lerp_color(a: QColor, b: QColor, t: float) -> QColor:
@@ -101,31 +110,31 @@ class ArcGauge(QWidget):
                else QColor(_THEME.txt_lo))
         return self._lerp_color(dim, QColor(_THEME.cyan), t)
 
-    def paintEvent(self, _e):
-        W, H   = self.width(), self.height()
+    def _build_face_cache(self, W, H):
+        """Render the static gauge face (bezel, gradients, vignette, arc track) to a pixmap."""
+        from PyQt6.QtGui import QPixmap
+        cache_key = (W, H, self._compact, _THEME.is_light, _THEME.bg, _THEME.card_bg, _THEME.card_bd)
+        if self._face_cache is not None and self._face_cache_key == cache_key:
+            return self._face_cache
+        self._face_cache_key = cache_key
+
         margin = 14 if self._compact else 22
         side   = min(W, H) - margin * 2
         rx, ry = (W - side) / 2, (H - side) / 2 - 8
         rect   = QRectF(rx, ry, side, side)
         r2     = side / 2
         cx, cy = rx + r2, ry + r2
+        light  = _THEME.is_light
+        _bg    = QColor(_THEME.bg)
+        _cbg   = QColor(_THEME.card_bg)
+        _cbd   = QColor(_THEME.card_bd)
 
-        a0    = self._DEG_START * 16
-        a_end = self._DEG_SPAN  * 16
-        pct   = max(0.0, min(1.0, (self._cur - self._lo) / max(self._hi - self._lo, 1e-9)))
-        a_val = int(a_end * pct)
-        col   = self._active_col()
-
-        p = QPainter(self)
+        pix = QPixmap(W, H)
+        pix.fill(QColor(0, 0, 0, 0))
+        p = QPainter(pix)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setBrush(Qt.BrushStyle.NoBrush)
 
-        light = _THEME.is_light
-        _bg   = QColor(_THEME.bg)
-        _cbg  = QColor(_THEME.card_bg)
-        _cbd  = QColor(_THEME.card_bd)
-
-        # Outer bezel — derives from card colors
+        # Outer bezel
         bezel_rect = rect.adjusted(-5, -5, 5, 5)
         bezel_grad = QRadialGradient(cx, cy, r2 + 5)
         if light:
@@ -145,11 +154,8 @@ class ArcGauge(QWidget):
         p.setPen(QPen(rim_col, 1.2))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawEllipse(bezel_rect)
-        trim = QColor(col); trim.setAlpha(35)
-        p.setPen(QPen(trim, 1.0))
-        p.drawEllipse(rect.adjusted(1, 1, -1, -1))
 
-        # Gauge face — light: cool white-grey; dark: deep version of theme bg
+        # Gauge face
         face_grad = QRadialGradient(cx, cy - r2 * 0.15, r2)
         if light:
             face_grad.setColorAt(0,    QColor("#d0e8f8"))
@@ -174,6 +180,73 @@ class ArcGauge(QWidget):
         vig.setColorAt(1.0, QColor(0, 0, 0, 30 if light else 70))
         p.setBrush(QBrush(vig))
         p.drawEllipse(rect.adjusted(1, 1, -1, -1))
+
+        # Arc track
+        a0    = self._DEG_START * 16
+        a_end = self._DEG_SPAN  * 16
+        inset = 12
+        trk_w = 7
+        arc_rect = rect.adjusted(inset, inset, -inset, -inset)
+        trk_col  = QColor("#7ab8e0") if light else _bg.darker(165)
+        trk = QPen(trk_col, trk_w); trk.setCapStyle(Qt.PenCapStyle.FlatCap)
+        p.setPen(trk); p.drawArc(arc_rect, a0, a_end)
+
+        # Minor tick marks (static — don't change with value)
+        if not self._compact:
+            t_outer = r2 - 2.5
+            inactive = _THEME.txt_lo
+            for i in range(21):
+                is_maj = (i % 5 == 0)
+                if is_maj:
+                    continue  # major ticks drawn dynamically (color depends on value)
+                t_val   = i / 20.0
+                ang_rad = math.radians(self._DEG_START + self._DEG_SPAN * t_val)
+                ca, sa  = math.cos(ang_rad), math.sin(ang_rad)
+                t_inner = t_outer - 3.5
+                tc = QColor(inactive); tc.setAlpha(100 if light else 80)
+                p.setPen(QPen(tc, 1.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+                p.drawLine(QPointF(cx + t_outer * ca, cy - t_outer * sa),
+                           QPointF(cx + t_inner * ca, cy - t_inner * sa))
+
+        p.end()
+        self._face_cache = pix
+        return pix
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._face_cache = None
+
+    def paintEvent(self, _e):
+        W, H   = self.width(), self.height()
+        margin = 14 if self._compact else 22
+        side   = min(W, H) - margin * 2
+        rx, ry = (W - side) / 2, (H - side) / 2 - 8
+        rect   = QRectF(rx, ry, side, side)
+        r2     = side / 2
+        cx, cy = rx + r2, ry + r2
+
+        a0    = self._DEG_START * 16
+        a_end = self._DEG_SPAN  * 16
+        pct   = max(0.0, min(1.0, (self._cur - self._lo) / max(self._hi - self._lo, 1e-9)))
+        a_val = int(a_end * pct)
+        col   = self._active_col()
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw cached static face
+        face = self._build_face_cache(W, H)
+        p.drawPixmap(0, 0, face)
+
+        light = _THEME.is_light
+        _bg   = QColor(_THEME.bg)
+
+        # Accent trim ring (depends on col)
+        trim = QColor(col); trim.setAlpha(35)
+        p.setPen(QPen(trim, 1.0)); p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(rect.adjusted(1, 1, -1, -1))
+
+        # Atmosphere glow (depends on pct and col)
         if pct > 0.02:
             atm = QRadialGradient(cx, cy, r2 * 0.96)
             ac0 = QColor(col); ac0.setAlpha(0)
@@ -184,36 +257,28 @@ class ArcGauge(QWidget):
             p.drawEllipse(rect.adjusted(1, 1, -1, -1))
         p.setBrush(Qt.BrushStyle.NoBrush)
 
-        # Arc track
+        # Arc hint (unfilled portion)
         inset    = 12
         trk_w    = 7
         arc_rect = rect.adjusted(inset, inset, -inset, -inset)
         arc_r2   = r2 - inset
-        trk_col = QColor("#7ab8e0") if light else _bg.darker(165)
-        trk = QPen(trk_col, trk_w); trk.setCapStyle(Qt.PenCapStyle.FlatCap)
-        p.setPen(trk); p.drawArc(arc_rect, a0, a_end)
         if pct < 0.99:
             hint_c = QColor(col); hint_c.setAlpha(35 if light else 22)
             hp = QPen(hint_c, trk_w - 2); hp.setCapStyle(Qt.PenCapStyle.FlatCap)
             p.setPen(hp); p.drawArc(arc_rect, a0 + a_val, a_end - a_val)
 
-        # Tick marks
+        # Major tick marks (color depends on value)
         if not self._compact:
             t_outer = r2 - 2.5
-            for i in range(21):
+            inactive = _THEME.txt_lo
+            for i in range(0, 21, 5):
                 t_val   = i / 20.0
-                is_maj  = (i % 5 == 0)
                 ang_rad = math.radians(self._DEG_START + self._DEG_SPAN * t_val)
                 ca, sa  = math.cos(ang_rad), math.sin(ang_rad)
-                t_len   = 6.5 if is_maj else 3.5
-                t_inner = t_outer - t_len
-                inactive = _THEME.txt_lo
-                if is_maj:
-                    tc = QColor(col) if t_val <= pct + 0.03 else QColor(inactive)
-                    tc.setAlpha(210 if light else 190); pw = 1.5
-                else:
-                    tc = QColor(inactive); tc.setAlpha(100 if light else 80); pw = 1.0
-                p.setPen(QPen(tc, pw, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+                t_inner = t_outer - 6.5
+                tc = QColor(col) if t_val <= pct + 0.03 else QColor(inactive)
+                tc.setAlpha(210 if light else 190)
+                p.setPen(QPen(tc, 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
                 p.drawLine(QPointF(cx + t_outer * ca, cy - t_outer * sa),
                            QPointF(cx + t_inner * ca, cy - t_inner * sa))
 
@@ -238,13 +303,12 @@ class ArcGauge(QWidget):
                 p.drawEllipse(QPointF(tip_x, tip_y), dr, dr)
             p.setBrush(Qt.BrushStyle.NoBrush)
 
-        # Value + label badge — drawn BEFORE needle so needle renders on top
+        # Value + label badge
         gauge_txt = _THEME.txt_hi if light else _GAUGE_TXT
         val_str   = f"{self._cur:.0f}{self._unit}"
         fs        = max(8 if self._compact else 9,
                         int(side * 0.15 * (4 / max(len(val_str), 4))))
 
-        # Position badge lower in the arc gap (near the open arc section)
         badge_h  = side * 0.20
         badge_w  = min(side * 0.46, W - 16)
         badge_cy = cy + arc_r2 * 0.50
@@ -268,14 +332,13 @@ class ArcGauge(QWidget):
         p.drawText(QRectF(badge_x, badge_y, badge_w, badge_h),
                    Qt.AlignmentFlag.AlignCenter, val_str)
 
-        # Label sits just below badge in accent color
         lbl_col = QColor(col); lbl_col.setAlpha(210)
         lbl_fs  = max(6 if self._compact else 7, int(side * 0.060))
         p.setFont(_font(lbl_fs)); p.setPen(lbl_col)
         p.drawText(QRectF(badge_x, badge_y + badge_h + 1, badge_w, side * 0.12),
                    Qt.AlignmentFlag.AlignCenter, self._label)
 
-        # Needle — drawn after badge so it renders on top
+        # Needle
         n_ang = math.radians(self._DEG_START + self._DEG_SPAN * pct)
         n_r   = arc_r2 - trk_w / 2 - 1
         n_tx  = cx + n_r * math.cos(n_ang)
@@ -288,7 +351,7 @@ class ArcGauge(QWidget):
         p.drawLine(QPointF(cx, cy), QPointF(n_tx, n_ty))
         p.setBrush(Qt.BrushStyle.NoBrush)
 
-        # Hub cap — matches face center
+        # Hub cap
         hub_col = QColor("#8bbfe0") if light else _bg.darker(170)
         p.setBrush(QBrush(hub_col))
         p.setPen(QPen(QColor(col), 0.8))
@@ -308,18 +371,23 @@ class MiniArcGauge(QWidget):
         self._cur    = 0.0
         self.setFixedSize(80, 90)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        t = QTimer(self); t.timeout.connect(self._tick); t.start(30)
+        self._anim = QTimer(self); self._anim.timeout.connect(self._tick); self._anim.setInterval(40)
 
     def set_value(self, v: float):
         self._target = max(0.0, min(100.0, v))
+        if not self._anim.isActive():
+            self._anim.start()
 
     def _tick(self):
         delta = self._target - self._cur
-        if abs(delta) > 0.05:
-            self._cur += delta * 0.18
+        if abs(delta) > 0.3:
+            self._cur += delta * 0.28
             self.update()
         elif self._cur != self._target:
             self._cur = self._target; self.update()
+            self._anim.stop()
+        else:
+            self._anim.stop()
 
     def paintEvent(self, _e):
         W, H   = self.width(), self.height()

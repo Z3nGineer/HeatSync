@@ -68,6 +68,7 @@ class StatusBar(QWidget):
                 lay.addWidget(_make_label(key))
 
         lay.addStretch(1)
+        self._slow_tick = 0  # counter for throttling slow-changing metrics
 
     def _apply_theme_styles(self):
         for lb in self._lbs.values():
@@ -77,6 +78,7 @@ class StatusBar(QWidget):
         self.refresh()
 
     def refresh(self):
+        # Fast-changing metrics — every tick
         used_r, tot_r, pct_r = s_ram()
         ram_type, ram_speed = s_ram_info()
         if ram_speed:
@@ -89,22 +91,40 @@ class StatusBar(QWidget):
         self._lbs["RAM"].setText(
             _sb_html("MEM", f"{used_r:.1f}/{tot_r:.0f}G ({pct_r:.0f}%){ram_sfx}"))
 
-        sw = psutil.swap_memory()
-        self._lbs["Swap"].setText(
-            _sb_html("Swap", f"{sw.used/1e9:.1f}/{sw.total/1e9:.0f}G")
-            if sw.total else _sb_html("Swap", "N/A"))
-
         used_v, tot_v, pct_v = s_gpu_vram()
         self._lbs["VRAM"].setText(
             _sb_html("VRAM", f"{used_v/1024:.1f}/{tot_v/1024:.0f}G ({pct_v:.0f}%)")
             if tot_v else _sb_html("VRAM", "N/A"))
+
+        pwr = s_gpu_power()
+        limit = s_gpu_power_limit()
+        if pwr > 0:
+            if limit > 0:
+                pwr_pct = pwr / limit * 100
+                self._lbs["GPU Power"].setText(
+                    _sb_html("PWR", f"{pwr:.0f}W ({pwr_pct:.0f}%)"))
+            else:
+                self._lbs["GPU Power"].setText(_sb_html("PWR", f"{pwr:.0f}W"))
+        else:
+            self._lbs["GPU Power"].setText(_sb_html("PWR", "N/A"))
+
+        # Slow-changing metrics — every 5 ticks
+        self._slow_tick += 1
+        if self._slow_tick >= 5:
+            self._slow_tick = 0
+            self._refresh_slow()
+
+    def _refresh_slow(self):
+        sw = psutil.swap_memory()
+        self._lbs["Swap"].setText(
+            _sb_html("Swap", f"{sw.used/1e9:.1f}/{sw.total/1e9:.0f}G")
+            if sw.total else _sb_html("Swap", "N/A"))
 
         freq = s_cpu_freq()
         cores = psutil.cpu_count(logical=True)
         self._lbs["Freq"].setText(_sb_html("CLK", f"{freq:.2f}GHz"))
         self._lbs["Cores"].setText(_sb_html("×", f"{cores}"))
 
-        # Disk: show single most-used mount by percentage
         disks = s_disk_all()
         if disks:
             _mount, used, total, pct = max(disks, key=lambda x: x[3])
@@ -118,18 +138,6 @@ class StatusBar(QWidget):
                 _sb_html("Disk", f"{_fmt_gb(used)}/{_fmt_gb(total)} ({pct:.0f}%)"))
         else:
             self._lbs["Disk"].setText(_sb_html("Disk", "N/A"))
-
-        pwr = s_gpu_power()
-        limit = s_gpu_power_limit()
-        if pwr > 0:
-            if limit > 0:
-                pwr_pct = pwr / limit * 100
-                self._lbs["GPU Power"].setText(
-                    _sb_html("PWR", f"{pwr:.0f}W ({pwr_pct:.0f}%)"))
-            else:
-                self._lbs["GPU Power"].setText(_sb_html("PWR", f"{pwr:.0f}W"))
-        else:
-            self._lbs["GPU Power"].setText(_sb_html("PWR", "N/A"))
 
         nvme = s_nvme_temps()
         if nvme:
