@@ -35,7 +35,7 @@ def _get_version() -> str:
                 return tag
     except Exception:
         pass
-    return "v1.0.75"
+    return "v1.0.76"
 
 VERSION = _get_version()
 
@@ -149,6 +149,20 @@ C_DANG = "#f44336"
 # ── CPU / GPU name helpers ────────────────────────────────────────────────────
 def _get_cpu_name() -> str:
     if IS_WINDOWS:
+        # platform.processor() on Windows returns PROCESSOR_IDENTIFIER
+        # ("AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD") — not the
+        # marketing name. The friendly name lives in the registry.
+        try:
+            import winreg
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+            ) as key:
+                name, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+                if name:
+                    return name.strip()
+        except Exception:
+            pass
         return platform.processor() or "CPU"
     try:
         with open("/proc/cpuinfo") as fh:
