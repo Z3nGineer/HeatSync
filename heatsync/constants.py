@@ -35,7 +35,7 @@ def _get_version() -> str:
                 return tag
     except Exception:
         pass
-    return "v1.0.77"
+    return "v1.0.78"
 
 VERSION = _get_version()
 
