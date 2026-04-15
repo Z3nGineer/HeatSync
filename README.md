@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/github/v/release/VibeSmiths/HeatSync?style=for-the-badge&label=version&color=cyan" alt="Latest version">
   <a href="https://github.com/VibeSmiths/HeatSync/releases/latest"><img src="https://img.shields.io/badge/download-latest-blue?style=for-the-badge" alt="Download"></a>
   <a href="https://aur.archlinux.org/packages/heatsync-bin"><img src="https://img.shields.io/badge/AUR-heatsync--bin-1793d1?style=for-the-badge&logo=archlinux&logoColor=white" alt="AUR"></a>
-  <img src="https://img.shields.io/badge/python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+">
+  <a href="https://winget.run/pkg/VibeSmiths/HeatSync"><img src="https://img.shields.io/badge/winget-VibeSmiths.HeatSync-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="winget"></a>
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License">
 </p>
 
@@ -32,7 +32,8 @@
 |---|---|---|
 | **Linux** | [HeatSync.AppImage](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.AppImage) | Works on any distro |
 | **Linux (Arch)** | `paru -S heatsync-bin` | AUR package |
-| **Windows** | [HeatSync.exe](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.exe) | Standalone — UAC prompt on launch |
+| **Windows** | `winget install VibeSmiths.HeatSync` | Recommended — handles trust automatically |
+| **Windows (manual)** | [HeatSync.exe](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.exe) | Standalone — UAC prompt on launch |
 
 ---
 
@@ -144,9 +145,17 @@ bash install.sh
 
 ### Windows
 
-Download [`HeatSync.exe`](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.exe) from the latest release and double-click it. Windows will show a UAC prompt — click Yes (admin is required to read CPU temperature MSRs). On first launch the .exe creates desktop and Start Menu shortcuts and a logon Task Scheduler entry for autostart.
+The easiest path is winget:
 
-LibreHardwareMonitor is bundled inside the .exe — no separate install needed.
+```
+winget install VibeSmiths.HeatSync
+```
+
+This downloads, verifies, and registers the `heatsync` command. Launch from Start Menu or by typing `heatsync` in any terminal.
+
+If you'd rather download manually: grab [`HeatSync.exe`](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.exe) and double-click it. With manual download Windows may show a SmartScreen warning ("Windows protected your PC") — click **More info → Run anyway**. If you see a hard block from Smart App Control, right-click the .exe → Properties → check **Unblock**, then try again.
+
+Either way, on first launch you'll see a UAC prompt — click Yes (admin is required to read CPU temperature MSRs). The .exe then creates desktop and Start Menu shortcuts and a logon Task Scheduler entry for autostart. LibreHardwareMonitor is bundled inside the .exe — no separate install needed.
 
 #### Building from source on Windows (contributors)
 
