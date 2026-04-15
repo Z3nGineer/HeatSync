@@ -76,11 +76,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("HeatSync")
 
-        if IS_WAYLAND:
-            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        else:
-            self.setWindowFlags(
-                Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
+        # Qt.Tool on Windows hides the taskbar entry, which makes minimize
+        # vanish the window entirely — users could only recover from the
+        # tray. Use a normal frameless window so minimize goes to taskbar.
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(880, 520)
         self.resize(1080, 540)
