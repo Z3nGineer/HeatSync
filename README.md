@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/VibeSmiths/HeatSync?style=for-the-badge&label=version&color=cyan" alt="Latest version">
-  <a href="https://gitlab.com/vibesmiths/HeatSync/-/releases"><img src="https://img.shields.io/badge/download-latest-blue?style=for-the-badge" alt="Download"></a>
+  <a href="https://github.com/VibeSmiths/HeatSync/releases/latest"><img src="https://img.shields.io/badge/download-latest-blue?style=for-the-badge" alt="Download"></a>
   <a href="https://aur.archlinux.org/packages/heatsync-bin"><img src="https://img.shields.io/badge/AUR-heatsync--bin-1793d1?style=for-the-badge&logo=archlinux&logoColor=white" alt="AUR"></a>
   <img src="https://img.shields.io/badge/python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License">
@@ -30,7 +30,7 @@
 
 | Platform | Download | |
 |---|---|---|
-| **Linux** | [HeatSync.AppImage](https://gitlab.com/vibesmiths/HeatSync/-/releases/permalink/latest/downloads/HeatSync.AppImage) | Works on any distro |
+| **Linux** | [HeatSync.AppImage](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.AppImage) | Works on any distro |
 | **Linux (Arch)** | `paru -S heatsync-bin` | AUR package |
 | **Windows** | [Run from source](#windows) | Requires Python 3.10+ |
 | **macOS** | [Run from source](#macos) | Requires Python 3.10+ |
