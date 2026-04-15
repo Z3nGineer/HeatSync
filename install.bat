@@ -20,21 +20,15 @@ echo [2/3] Installing dependencies...
 .venv\Scripts\pip install -r requirements.txt -q
 echo       Dependencies installed.
 
-:: Autostart via Windows registry
-echo [3/3] Setting up autostart...
-set "PYTHON=%~dp0.venv\Scripts\python.exe"
-set "SCRIPT=%~dp0HeatSync.py"
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" ^
-    /v "HeatSync" /t REG_SZ ^
-    /d "\"%PYTHON%\" \"%SCRIPT%\"" /f >nul 2>&1
-if errorlevel 1 (
-    echo       WARNING: Could not add autostart registry entry.
-) else (
-    echo       Autostart registry entry created.
-)
+:: Autostart is configured on first launch via Task Scheduler (needs admin,
+:: which run.bat supplies by self-elevating). Just scrub any legacy
+:: HKCU\...\Run entry from a previous install.
+echo [3/3] Cleaning up legacy autostart entry (if any)...
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" ^
+    /v "HeatSync" /f >nul 2>&1
 
 echo.
 echo === Done! ===
-echo Run HeatSync with:  run.bat
-echo Or directly:        .venv\Scripts\python.exe HeatSync.py
+echo Run HeatSync with:  run.bat  (will prompt for admin)
+echo First launch creates the scheduled task for autostart.
 pause

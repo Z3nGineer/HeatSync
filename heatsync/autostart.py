@@ -46,21 +46,51 @@ def _autostart_linux(enable: bool) -> None:
             pass
 
 
-def _autostart_windows(enable: bool) -> None:
+_TASK_NAME = "HeatSync"
+
+
+def _remove_legacy_run_key() -> None:
+    """Delete the old HKCU\\...\\Run\\HeatSync entry from pre-Task-Scheduler installs."""
     import winreg  # type: ignore
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
     try:
-        if enable:
-            exe = os.path.abspath(sys.executable)
-            winreg.SetValueEx(key, "HeatSync", 0, winreg.REG_SZ, f'"{exe}"')
-        else:
-            try:
-                winreg.DeleteValue(key, "HeatSync")
-            except FileNotFoundError:
-                pass
-    finally:
-        winreg.CloseKey(key)
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0, winreg.KEY_SET_VALUE,
+        )
+        try:
+            winreg.DeleteValue(key, "HeatSync")
+        except FileNotFoundError:
+            pass
+        finally:
+            winreg.CloseKey(key)
+    except Exception:
+        pass
+
+
+def _autostart_windows(enable: bool) -> None:
+    # HeatSync needs admin to read CPU temps via LHM/WinRing0. HKCU\...\Run
+    # can't elevate, so we use a Task Scheduler logon task with RunLevel=Highest.
+    # Creating/deleting such a task itself requires admin; run.bat self-elevates
+    # to provide it.
+    _remove_legacy_run_key()
+
+    flags = 0x08000000  # CREATE_NO_WINDOW, suppresses schtasks console flash
+
+    if enable:
+        pythonw = os.path.join(_SCRIPT_DIR, ".venv", "Scripts", "pythonw.exe")
+        script = os.path.join(_SCRIPT_DIR, "HeatSync.py")
+        tr = f'"{pythonw}" "{script}"'
+        subprocess.run(
+            ["schtasks", "/Create", "/TN", _TASK_NAME, "/TR", tr,
+             "/SC", "ONLOGON", "/RL", "HIGHEST", "/F"],
+            capture_output=True, timeout=10, creationflags=flags,
+        )
+    else:
+        subprocess.run(
+            ["schtasks", "/Delete", "/TN", _TASK_NAME, "/F"],
+            capture_output=True, timeout=10, creationflags=flags,
+        )
 
 
 def _autostart_macos(enable: bool) -> None:
