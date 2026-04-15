@@ -49,4 +49,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     uac_admin=(sys.platform == "win32"),
+    icon='assets/icon.png',
 )

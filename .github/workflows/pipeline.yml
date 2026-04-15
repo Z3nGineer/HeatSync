@@ -147,15 +147,7 @@ jobs:
           sed -i 's/return "v[^"]*"  # fallback — replaced by CI before build/return "v${{ needs.versioner.outputs.version }}"  # fallback — replaced by CI before build/' HeatSync.py
 
       - name: Build Windows EXE
-        run: |
-          pyinstaller `
-            --onefile `
-            --windowed `
-            --name HeatSync `
-            --icon=assets/icon.png `
-            --add-data "assets:assets" `
-            --add-data "VERSION:." `
-            HeatSync.py
+        run: pyinstaller HeatSync.spec
 
       - name: Sign EXE with Authenticode (SignPath.io)
         if: env.SIGNPATH_AVAILABLE == 'true'
