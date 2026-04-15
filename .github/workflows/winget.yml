@@ -1,0 +1,22 @@
+name: 📦 Submit to winget
+
+# Auto-submits a manifest update to microsoft/winget-pkgs when a new
+# GitHub Release is published. Requires a WINGET_TOKEN repo secret —
+# a GitHub PAT with `public_repo` scope (used to fork winget-pkgs and
+# open the PR).
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit to winget-pkgs
+        uses: vedantmgoyal2009/winget-releaser@v2
+        with:
+          identifier: VibeSmiths.HeatSync
+          installers-regex: '^HeatSync\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}
