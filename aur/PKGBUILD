@@ -1,7 +1,7 @@
 # Maintainer: VibeSmiths <vibesmiths@users.noreply.gitlab.com>
 
 pkgname=heatsync-bin
-pkgver=1.0.71
+pkgver=1.0.72
 pkgrel=1
 pkgdesc="Real-time system monitor with animated gauges, sparkline graphs, 10 themes, compact mode, alerts, and data export. Supports NVIDIA, AMD, and Intel GPUs."
 arch=('x86_64')
