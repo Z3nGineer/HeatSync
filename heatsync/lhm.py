@@ -138,6 +138,29 @@ def fans():
     return result
 
 
+def pawnio_installed() -> bool:
+    """Return True if the PawnIO driver service is registered on this system.
+
+    PawnIO is a Microsoft-signed kernel driver used by newer LHM builds to
+    read CPU temperature MSRs on Windows 11 systems that have Memory
+    Integrity / Core Isolation enabled (which blocks the older WinRing0
+    driver). Without PawnIO, CPU temps return None on those systems.
+    """
+    if sys.platform != "win32":
+        return True
+    try:
+        import winreg
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Services\PawnIO",
+        ):
+            return True
+    except (FileNotFoundError, OSError):
+        return False
+    except Exception:
+        return False
+
+
 def nvme_temps():
     """Returns [(name, temp_C), ...] for storage drives."""
     if _computer is None:

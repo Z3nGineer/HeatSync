@@ -54,6 +54,7 @@ _DEFAULT_SETTINGS: dict = {
     },
     "locked_to_top": False,
     "first_run_done": False,
+    "pawnio_prompt_shown": False,
 }
 
 _GEOMETRY_KEYS = frozenset({
