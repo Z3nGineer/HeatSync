@@ -78,9 +78,12 @@ def _autostart_windows(enable: bool) -> None:
     flags = 0x08000000  # CREATE_NO_WINDOW, suppresses schtasks console flash
 
     if enable:
-        pythonw = os.path.join(_SCRIPT_DIR, ".venv", "Scripts", "pythonw.exe")
-        script = os.path.join(_SCRIPT_DIR, "HeatSync.py")
-        tr = f'"{pythonw}" "{script}"'
+        if getattr(sys, "frozen", False):
+            tr = f'"{os.path.abspath(sys.executable)}"'
+        else:
+            pythonw = os.path.join(_SCRIPT_DIR, ".venv", "Scripts", "pythonw.exe")
+            script = os.path.join(_SCRIPT_DIR, "HeatSync.py")
+            tr = f'"{pythonw}" "{script}"'
         subprocess.run(
             ["schtasks", "/Create", "/TN", _TASK_NAME, "/TR", tr,
              "/SC", "ONLOGON", "/RL", "HIGHEST", "/F"],

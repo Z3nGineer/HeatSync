@@ -44,7 +44,12 @@ def _shortcuts_linux() -> None:
 
 
 def _shortcuts_windows() -> None:
-    run_bat = os.path.join(_SCRIPT_DIR, "run.bat")
+    if getattr(sys, "frozen", False):
+        target = os.path.abspath(sys.executable)
+        workdir = os.path.dirname(target)
+    else:
+        target = os.path.join(_SCRIPT_DIR, "run.bat")
+        workdir = _SCRIPT_DIR
     icon_path = os.path.join(_SCRIPT_DIR, "assets", "icon.png")
 
     targets = []
@@ -62,8 +67,8 @@ def _shortcuts_windows() -> None:
         ps = (
             f"$ws = New-Object -ComObject WScript.Shell; "
             f"$s = $ws.CreateShortcut('{lnk_path}'); "
-            f"$s.TargetPath = '{run_bat}'; "
-            f"$s.WorkingDirectory = '{_SCRIPT_DIR}'; "
+            f"$s.TargetPath = '{target}'; "
+            f"$s.WorkingDirectory = '{workdir}'; "
             f"$s.Description = 'HeatSync System Monitor'; "
             f"$s.Save()"
         )
