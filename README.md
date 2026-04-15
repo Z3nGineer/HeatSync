@@ -5,7 +5,7 @@
 <h1 align="center">HeatSync</h1>
 
 <p align="center">
-  Real-time system monitor for Linux, Windows, and macOS
+  Real-time system monitor for Linux and Windows
 </p>
 
 <p align="center">
@@ -32,8 +32,7 @@
 |---|---|---|
 | **Linux** | [HeatSync.AppImage](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.AppImage) | Works on any distro |
 | **Linux (Arch)** | `paru -S heatsync-bin` | AUR package |
-| **Windows** | [Run from source](#windows) | Requires Python 3.10+ |
-| **macOS** | [Run from source](#macos) | Requires Python 3.10+ |
+| **Windows** | [HeatSync.exe](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.exe) | Standalone — UAC prompt on launch |
 
 ---
 
@@ -145,61 +144,22 @@ bash install.sh
 
 ### Windows
 
-You'll need **Python 3.10 or newer** and **Git** installed first.
+Download [`HeatSync.exe`](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.exe) from the latest release and double-click it. Windows will show a UAC prompt — click Yes (admin is required to read CPU temperature MSRs). On first launch the .exe creates desktop and Start Menu shortcuts and a logon Task Scheduler entry for autostart.
 
-1. **Install Python** -- download from [python.org](https://www.python.org/downloads/). During install, check **"Add python.exe to PATH"** (important!).
+LibreHardwareMonitor is bundled inside the .exe — no separate install needed.
 
-2. **Install Git** -- download from [git-scm.com](https://git-scm.com/downloads/win). Use the default options.
+#### Building from source on Windows (contributors)
 
-3. **Open a terminal** -- press `Win + R`, type `cmd`, and hit Enter.
-
-4. **Run these commands** one at a time:
+If you want to hack on HeatSync rather than just run it:
 
 ```
-git clone https://gitlab.com/vibesmiths/HeatSync.git
+git clone https://github.com/VibeSmiths/HeatSync.git
 cd HeatSync
 install.bat
+run.bat
 ```
 
-5. **Launch HeatSync** -- double-click `run.bat` in the HeatSync folder. On first launch, a desktop shortcut and Start Menu entry are created automatically.
-
-```
-.venv\Scripts\python.exe HeatSync.py
-```
-
-> CPU temperature on Windows requires [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running in the background.
-
-### macOS
-
-You'll need **Python 3.10 or newer** and **Git** installed first.
-
-1. **Install Homebrew** (if you don't have it) -- open Terminal and paste:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-2. **Install Python and Git:**
-
-```bash
-brew install python git
-```
-
-3. **Download and install HeatSync:**
-
-```bash
-git clone https://gitlab.com/vibesmiths/HeatSync.git
-cd HeatSync
-bash install.sh
-```
-
-4. **Launch HeatSync:**
-
-```bash
-bash run.sh
-```
-
-On first launch, a shortcut is created in `~/Applications` and autostart is enabled automatically.
+Requires Python **3.10–3.13** (pythonnet does not yet ship wheels for 3.14). `run.bat` self-elevates so LHM can read sensors.
 
 ---
 
