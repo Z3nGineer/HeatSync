@@ -1,6 +1,6 @@
 pkgbase = heatsync-bin
 	pkgdesc = Real-time system monitor with animated gauges, sparkline graphs, 10 themes, compact mode, alerts, and data export. Supports NVIDIA, AMD, and Intel GPUs.
-	pkgver = 1.0.75
+	pkgver = 1.0.76
 	pkgrel = 1
 	url = https://gitlab.com/vibesmiths/HeatSync
 	arch = x86_64
@@ -13,7 +13,7 @@ pkgbase = heatsync-bin
 	provides = heatsync
 	conflicts = heatsync
 	options = !strip
-	source = HeatSync-1.0.75.AppImage::https://gitlab.com/vibesmiths/HeatSync/-/releases/v1.0.75/downloads/HeatSync.AppImage
+	source = HeatSync-1.0.76.AppImage::https://gitlab.com/vibesmiths/HeatSync/-/releases/v1.0.76/downloads/HeatSync.AppImage
 	source = icon.png::https://gitlab.com/vibesmiths/HeatSync/-/raw/main/assets/icon.png
 	sha256sums = SKIP
 	sha256sums = SKIP
