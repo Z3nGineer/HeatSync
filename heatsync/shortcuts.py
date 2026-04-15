@@ -60,12 +60,12 @@ def _shortcuts_windows() -> None:
 
     for lnk_path in targets:
         ps = (
-            f'$ws = New-Object -ComObject WScript.Shell; '
-            f'$s = $ws.CreateShortcut("{lnk_path}"); '
-            f'$s.TargetPath = "{run_bat}"; '
-            f'$s.WorkingDirectory = "{_SCRIPT_DIR}"; '
-            f'$s.Description = "HeatSync System Monitor"; '
-            f'$s.Save()'
+            f"$ws = New-Object -ComObject WScript.Shell; "
+            f"$s = $ws.CreateShortcut('{lnk_path}'); "
+            f"$s.TargetPath = '{run_bat}'; "
+            f"$s.WorkingDirectory = '{_SCRIPT_DIR}'; "
+            f"$s.Description = 'HeatSync System Monitor'; "
+            f"$s.Save()"
         )
         subprocess.run(
             ["powershell", "-NoProfile", "-Command", ps],
