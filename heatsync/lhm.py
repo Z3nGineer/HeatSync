@@ -16,6 +16,15 @@ _SensorType = None
 
 if sys.platform == "win32":
     try:
+        # pythonnet hosts the CLR on this thread and, if COM isn't initialized
+        # yet, leaves it as MTA. Qt's later OleInitialize() needs STA and fails
+        # with "Cannot change thread mode after it is set." Claim STA first.
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+        except Exception:
+            pass
+
         from HardwareMonitor.Hardware import Computer, HardwareType, SensorType
 
         _HardwareType = HardwareType
