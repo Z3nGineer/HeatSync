@@ -1,0 +1,36 @@
+name: 🔄 Mirror to GitLab
+
+# GitHub is the canonical repo. This workflow keeps the GitLab copy
+# in sync (main branch + tags) so external clones/links keep working.
+# Anyone who pushes directly to GitLab will have their work overwritten —
+# that's the deliberate trade-off of a one-way mirror.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-to-gitlab
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main and tags to GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          if [ -z "$GITLAB_TOKEN" ]; then
+            echo "::error::GITLAB_TOKEN secret is not set."
+            exit 1
+          fi
+          git remote add gitlab "https://oauth2:${GITLAB_TOKEN}@gitlab.com/vibesmiths/HeatSync.git"
+          git push --force gitlab "refs/heads/main:refs/heads/main"
+          git push --force --tags gitlab
