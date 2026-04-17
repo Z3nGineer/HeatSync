@@ -87,20 +87,39 @@ if IS_WINDOWS:
             ("time", _wt.DWORD), ("pt", _wt.POINT),
         ]
 
+    def _enable_snap_styles(hwnd):
+        """Add WS_THICKFRAME | WS_CAPTION so Windows Snap treats this
+        frameless window as a snap-eligible resizable window."""
+        GWL_STYLE = -16
+        WS_THICKFRAME = 0x00040000
+        WS_CAPTION    = 0x00C00000
+        user32 = ctypes.windll.user32
+        style = user32.GetWindowLongW(hwnd, GWL_STYLE)
+        user32.SetWindowLongW(hwnd, GWL_STYLE,
+                              style | WS_THICKFRAME | WS_CAPTION)
+
     class _SnapFilter(QAbstractNativeEventFilter):
-        """Handle WM_NCHITTEST so Windows Snap Layouts work with our
-        frameless window."""
+        """Handle WM_NCHITTEST + WM_NCCALCSIZE so Windows Snap Layouts
+        work with our frameless window."""
 
         def __init__(self, win):
             super().__init__()
             self._win = win
+            self._hwnd = int(win.winId())
 
         def nativeEventFilter(self, eventType, message):
             if eventType != b'windows_generic_MSG':
                 return False, 0
             try:
                 msg = _WinMSG.from_address(int(message))
-                if msg.message == 0x0084:               # WM_NCHITTEST
+                if msg.hwnd != self._hwnd:
+                    return False, 0
+                if msg.message == 0x0083:               # WM_NCCALCSIZE
+                    # Zero out the non-client area so WS_CAPTION doesn't
+                    # paint a system title bar.
+                    if msg.wParam:
+                        return True, 0
+                elif msg.message == 0x0084:             # WM_NCHITTEST
                     ret = self._hit_test(msg.lParam)
                     if ret is not None:
                         return True, ret
@@ -1118,6 +1137,7 @@ def main():
 
     # Install Snap Layout filter after window is fully constructed
     if IS_WINDOWS and _SnapFilter is not None:
+        _enable_snap_styles(int(win.winId()))
         win._snap_filter = _SnapFilter(win)
         app.installNativeEventFilter(win._snap_filter)
 
