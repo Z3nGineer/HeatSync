@@ -60,6 +60,7 @@ _DEFAULT_SETTINGS: dict = {
 _GEOMETRY_KEYS = frozenset({
     "x", "y", "w", "h", "docked",
     "dock_x", "dock_y", "dock_w",
+    "dock_screen_name",
     "pre_dock_w", "pre_dock_h",
     "compact_pos",
 })

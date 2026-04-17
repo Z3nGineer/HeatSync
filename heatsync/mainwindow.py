@@ -70,6 +70,19 @@ class _Background(QWidget):
         p.drawRoundedRect(r, self._R, self._R); p.end()
 
 
+# ── Win32 hit-test support (enables Windows Snap Layouts) ────────────────────
+if IS_WINDOWS:
+    import ctypes
+    import ctypes.wintypes as _wt
+
+    class _WinMSG(ctypes.Structure):
+        _fields_ = [
+            ("hwnd", _wt.HWND), ("message", _wt.UINT),
+            ("wParam", _wt.WPARAM), ("lParam", _wt.LPARAM),
+            ("time", _wt.DWORD), ("pt", _wt.POINT),
+        ]
+
+
 # ── Main Window ───────────────────────────────────────────────────────────────
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -211,6 +224,21 @@ class MainWindow(QMainWindow):
         if self._settings.get("locked_to_top", False):
             self._locked_to_top = True
             self._lock_timer.start()
+
+        # Re-pin docked window after display topology changes (Windows
+        # shuffles screen coords when a fullscreen-exclusive game exits,
+        # which can leave HeatSync displaced from its dock spot).
+        self._reapply_timer = QTimer(self)
+        self._reapply_timer.setSingleShot(True)
+        self._reapply_timer.setInterval(300)
+        self._reapply_timer.timeout.connect(self._reapply_dock)
+        self._screen_signal_screens: list = []
+        qapp = QApplication.instance()
+        qapp.screenAdded.connect(self._on_screens_changed)
+        qapp.screenRemoved.connect(self._on_screens_changed)
+        qapp.primaryScreenChanged.connect(self._on_screens_changed)
+        qapp.focusWindowChanged.connect(self._on_focus_window_changed)
+        self._reconnect_screen_signals()
 
         # Auto-follow system theme
         try:
@@ -563,6 +591,7 @@ class MainWindow(QMainWindow):
                 "dock_x": d["dock_x"],
                 "dock_y": d["dock_y"],
                 "dock_w": d.get("dock_w"),
+                "dock_screen_name": d.get("dock_screen_name"),
             }
 
     def _save_pos(self):
@@ -623,10 +652,88 @@ class MainWindow(QMainWindow):
     def showEvent(self, event):
         super().showEvent(event)
         d = self._pending_restore
-        if not d:
-            return
-        self._pending_restore = None
-        self._apply_state(d, first_show=True)
+        if d:
+            self._pending_restore = None
+            self._apply_state(d, first_show=True)
+        elif self._docked:
+            # Re-show after hide (tray, game minimised us): re-pin to dock.
+            self._schedule_reapply_dock()
+
+    # ── Win32 native event handling (Snap Layouts) ──────────────────────
+    def nativeEvent(self, eventType, message):
+        if IS_WINDOWS and eventType == b'windows_generic_MSG':
+            msg = _WinMSG.from_address(int(message))
+            if msg.message == 0x0084:                   # WM_NCHITTEST
+                ret = self._wm_nchittest(msg.lParam)
+                if ret is not None:
+                    return True, ret
+            elif msg.message == 0x00A3:                 # WM_NCLBUTTONDBLCLK
+                self.toggle_dock()
+                return True, 0
+            elif msg.message == 0x00A5:                 # WM_NCRBUTTONUP
+                self._show_caption_context_menu()
+                return True, 0
+        return super().nativeEvent(eventType, message)
+
+    def _wm_nchittest(self, lParam):
+        HTCLIENT = 1; HTCAPTION = 2
+        HTLEFT = 10; HTRIGHT = 11; HTTOP = 12
+        HTTOPLEFT = 13; HTTOPRIGHT = 14
+        HTBOTTOM = 15; HTBOTTOMLEFT = 16; HTBOTTOMRIGHT = 17
+
+        x = lParam & 0xFFFF
+        if x >= 0x8000: x -= 0x10000
+        y = (lParam >> 16) & 0xFFFF
+        if y >= 0x8000: y -= 0x10000
+
+        pos = self.mapFromGlobal(QPoint(x, y))
+        w, h = self.width(), self.height()
+        if not (0 <= pos.x() < w and 0 <= pos.y() < h):
+            return None                                 # outside — default handling
+
+        # When docked, Qt handles drag-to-undock via TitleBar/CompactBar
+        if self._docked:
+            return HTCLIENT
+
+        # Resize edges (6 px border)
+        B = 6
+        at_l, at_r = pos.x() < B, pos.x() >= w - B
+        at_t, at_b = pos.y() < B, pos.y() >= h - B
+        if at_t and at_l: return HTTOPLEFT
+        if at_t and at_r: return HTTOPRIGHT
+        if at_b and at_l: return HTBOTTOMLEFT
+        if at_b and at_r: return HTBOTTOMRIGHT
+        if at_l: return HTLEFT
+        if at_r: return HTRIGHT
+        if at_t: return HTTOP
+        if at_b: return HTBOTTOM
+
+        # Caption area — title bar in normal mode, whole window in compact
+        compact = self._settings.get("compact", False)
+        caption_h = h if compact else 62                # TitleBar is 52px + 10px top margin
+        if pos.y() < caption_h:
+            child = self.childAt(pos)
+            # TitleBar/CompactBar themselves, or labels with
+            # WA_TransparentForMouseEvents → caption (draggable).
+            # Interactive buttons → client (clickable).
+            if (child is None
+                    or child is self._title_bar
+                    or child is self._compact_bar
+                    or child.testAttribute(
+                        Qt.WidgetAttribute.WA_TransparentForMouseEvents)):
+                return HTCAPTION
+            return HTCLIENT
+
+        return HTCLIENT
+
+    def _show_caption_context_menu(self):
+        from PyQt6.QtGui import QCursor, QContextMenuEvent
+        compact = self._settings.get("compact", False)
+        target = self._compact_bar if compact else self._title_bar
+        gpos = QCursor.pos()
+        lpos = target.mapFromGlobal(gpos)
+        evt = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, lpos, gpos)
+        target.contextMenuEvent(evt)
 
     def _apply_state(self, d, first_show=True):
         docked = d.get("docked", False)
@@ -664,6 +771,9 @@ class MainWindow(QMainWindow):
                     cw = self.centralWidget()
                     if isinstance(cw, _Background): cw.set_squared(True)
                     self._title_bar.dock_btn.set_active(True)
+                # Re-resolve target screen by name and re-pin in case the
+                # display layout shifted between sessions.
+                self._schedule_reapply_dock()
             else:
                 if w and h:
                     self.resize(w, h)
@@ -779,16 +889,91 @@ class MainWindow(QMainWindow):
         """Re-pin to top edge every 3s while locked."""
         if not self._locked_to_top or not self._docked:
             return
-        cur_screen = (QApplication.screenAt(self.frameGeometry().center())
-                      or self._pre_dock_screen or self.screen())
-        if cur_screen is None:
+        target = self._find_dock_screen()
+        if target is None:
             return
-        ag  = cur_screen.availableGeometry()
+        ag  = target.availableGeometry()
         tx, ty, dw, dh = ag.x(), ag.y(), ag.width(), self.height()
         if IS_WAYLAND:
             self._kwin_set_geometry(tx, ty, dw, dh)
         else:
             self.move(tx, ty)
+
+    # ── Dock re-pin (event-driven) ─────────────────────────────────────────
+    def _find_dock_screen(self):
+        """Find the screen the dock belongs to. Prefer stored screen name
+        so it survives display topology shuffles (e.g. fullscreen game exit
+        renumbering the secondary monitor)."""
+        screens = QApplication.screens()
+        if self._dock_info:
+            name = self._dock_info.get("dock_screen_name")
+            if name:
+                for s in screens:
+                    if s.name() == name:
+                        return s
+            dx = self._dock_info.get("dock_x")
+            dy = self._dock_info.get("dock_y")
+            if dx is not None and dy is not None:
+                pt = QPoint(int(dx), int(dy))
+                for s in screens:
+                    if s.geometry().contains(pt):
+                        return s
+        return (QApplication.screenAt(self.frameGeometry().center())
+                or self._pre_dock_screen or self.screen())
+
+    def _schedule_reapply_dock(self, *_):
+        if self._docked:
+            self._reapply_timer.start()
+
+    def _reapply_dock(self):
+        if not self._docked:
+            return
+        target = self._find_dock_screen()
+        if target is None:
+            return
+        ag = target.availableGeometry()
+        tx, ty, dw = ag.x(), ag.y(), ag.width()
+        dh = self.height()
+        cur = self.frameGeometry()
+        if cur.x() == tx and cur.y() == ty and self.width() == dw:
+            return
+        if IS_WAYLAND:
+            self._kwin_set_geometry(tx, ty, dw, dh)
+        else:
+            self.resize(dw, dh)
+            self.move(tx, ty)
+        if self._dock_info is None:
+            self._dock_info = {}
+        self._dock_info.update({
+            "dock_x": tx, "dock_y": ty, "dock_w": dw,
+            "dock_screen_name": target.name(),
+        })
+
+    def _reconnect_screen_signals(self):
+        for s in self._screen_signal_screens:
+            for sig_name in ("geometryChanged", "virtualGeometryChanged",
+                             "availableGeometryChanged"):
+                sig = getattr(s, sig_name, None)
+                if sig is not None:
+                    try: sig.disconnect(self._schedule_reapply_dock)
+                    except (TypeError, RuntimeError): pass
+        self._screen_signal_screens = list(QApplication.screens())
+        for s in self._screen_signal_screens:
+            for sig_name in ("geometryChanged", "virtualGeometryChanged",
+                             "availableGeometryChanged"):
+                sig = getattr(s, sig_name, None)
+                if sig is not None:
+                    try: sig.connect(self._schedule_reapply_dock)
+                    except (TypeError, RuntimeError): pass
+
+    def _on_screens_changed(self, *_):
+        self._reconnect_screen_signals()
+        self._schedule_reapply_dock()
+
+    def _on_focus_window_changed(self, win):
+        # Likely a fullscreen game just released focus — re-pin if needed.
+        if self._docked and win is not None:
+            self._schedule_reapply_dock()
 
     # ── Dock toggle ────────────────────────────────────────────────────────
     def toggle_dock(self, via_drag: bool = False):
@@ -801,7 +986,8 @@ class MainWindow(QMainWindow):
             ag = cur_screen.availableGeometry()
             tx, ty = ag.x(), ag.y()
             dw, dh = ag.width(), self.height()
-            self._dock_info = {"dock_x": tx, "dock_y": ty, "dock_w": dw}
+            self._dock_info = {"dock_x": tx, "dock_y": ty, "dock_w": dw,
+                               "dock_screen_name": cur_screen.name() if cur_screen else None}
             if IS_WAYLAND:
                 self.resize(dw, dh)
                 QTimer.singleShot(250, lambda: self._kwin_set_geometry(tx, ty, dw, dh))
