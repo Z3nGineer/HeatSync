@@ -70,10 +70,15 @@ class _Background(QWidget):
         p.drawRoundedRect(r, self._R, self._R); p.end()
 
 
-# ── Win32 hit-test support (enables Windows Snap Layouts) ────────────────────
+# ── Win32 Snap Layout support ────────────────────────────────────────────────
+# Uses QAbstractNativeEventFilter (application-level) instead of overriding
+# QMainWindow.nativeEvent, which can segfault in PyInstaller-frozen builds.
+_SnapFilter = None
+
 if IS_WINDOWS:
     import ctypes
     import ctypes.wintypes as _wt
+    from PyQt6.QtCore import QAbstractNativeEventFilter
 
     class _WinMSG(ctypes.Structure):
         _fields_ = [
@@ -81,6 +86,89 @@ if IS_WINDOWS:
             ("wParam", _wt.WPARAM), ("lParam", _wt.LPARAM),
             ("time", _wt.DWORD), ("pt", _wt.POINT),
         ]
+
+    class _SnapFilter(QAbstractNativeEventFilter):
+        """Handle WM_NCHITTEST so Windows Snap Layouts work with our
+        frameless window."""
+
+        def __init__(self, win):
+            super().__init__()
+            self._win = win
+
+        def nativeEventFilter(self, eventType, message):
+            if eventType != b'windows_generic_MSG':
+                return False, 0
+            try:
+                msg = _WinMSG.from_address(int(message))
+                if msg.message == 0x0084:               # WM_NCHITTEST
+                    ret = self._hit_test(msg.lParam)
+                    if ret is not None:
+                        return True, ret
+                elif msg.message == 0x00A3:             # WM_NCLBUTTONDBLCLK
+                    self._win.toggle_dock()
+                    return True, 0
+                elif msg.message == 0x00A5:             # WM_NCRBUTTONUP
+                    self._show_context_menu()
+                    return True, 0
+            except Exception:
+                pass
+            return False, 0
+
+        def _hit_test(self, lParam):
+            HTCLIENT = 1; HTCAPTION = 2
+            HTLEFT = 10; HTRIGHT = 11; HTTOP = 12
+            HTTOPLEFT = 13; HTTOPRIGHT = 14
+            HTBOTTOM = 15; HTBOTTOMLEFT = 16; HTBOTTOMRIGHT = 17
+
+            x = lParam & 0xFFFF
+            if x >= 0x8000: x -= 0x10000
+            y = (lParam >> 16) & 0xFFFF
+            if y >= 0x8000: y -= 0x10000
+
+            win = self._win
+            pos = win.mapFromGlobal(QPoint(x, y))
+            w, h = win.width(), win.height()
+            if not (0 <= pos.x() < w and 0 <= pos.y() < h):
+                return None
+
+            if win._docked:
+                return HTCLIENT
+
+            B = 6
+            at_l, at_r = pos.x() < B, pos.x() >= w - B
+            at_t, at_b = pos.y() < B, pos.y() >= h - B
+            if at_t and at_l: return HTTOPLEFT
+            if at_t and at_r: return HTTOPRIGHT
+            if at_b and at_l: return HTBOTTOMLEFT
+            if at_b and at_r: return HTBOTTOMRIGHT
+            if at_l: return HTLEFT
+            if at_r: return HTRIGHT
+            if at_t: return HTTOP
+            if at_b: return HTBOTTOM
+
+            compact = win._settings.get("compact", False)
+            caption_h = h if compact else 62
+            if pos.y() < caption_h:
+                child = win.childAt(pos)
+                if (child is None
+                        or child is win._title_bar
+                        or child is win._compact_bar
+                        or child.testAttribute(
+                            Qt.WidgetAttribute.WA_TransparentForMouseEvents)):
+                    return HTCAPTION
+                return HTCLIENT
+
+            return HTCLIENT
+
+        def _show_context_menu(self):
+            from PyQt6.QtGui import QCursor, QContextMenuEvent
+            win = self._win
+            compact = win._settings.get("compact", False)
+            target = win._compact_bar if compact else win._title_bar
+            gpos = QCursor.pos()
+            lpos = target.mapFromGlobal(gpos)
+            evt = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, lpos, gpos)
+            target.contextMenuEvent(evt)
 
 
 # ── Main Window ───────────────────────────────────────────────────────────────
@@ -659,81 +747,6 @@ class MainWindow(QMainWindow):
             # Re-show after hide (tray, game minimised us): re-pin to dock.
             self._schedule_reapply_dock()
 
-    # ── Win32 native event handling (Snap Layouts) ──────────────────────
-    def nativeEvent(self, eventType, message):
-        if IS_WINDOWS and eventType == b'windows_generic_MSG':
-            msg = _WinMSG.from_address(int(message))
-            if msg.message == 0x0084:                   # WM_NCHITTEST
-                ret = self._wm_nchittest(msg.lParam)
-                if ret is not None:
-                    return True, ret
-            elif msg.message == 0x00A3:                 # WM_NCLBUTTONDBLCLK
-                self.toggle_dock()
-                return True, 0
-            elif msg.message == 0x00A5:                 # WM_NCRBUTTONUP
-                self._show_caption_context_menu()
-                return True, 0
-        return super().nativeEvent(eventType, message)
-
-    def _wm_nchittest(self, lParam):
-        HTCLIENT = 1; HTCAPTION = 2
-        HTLEFT = 10; HTRIGHT = 11; HTTOP = 12
-        HTTOPLEFT = 13; HTTOPRIGHT = 14
-        HTBOTTOM = 15; HTBOTTOMLEFT = 16; HTBOTTOMRIGHT = 17
-
-        x = lParam & 0xFFFF
-        if x >= 0x8000: x -= 0x10000
-        y = (lParam >> 16) & 0xFFFF
-        if y >= 0x8000: y -= 0x10000
-
-        pos = self.mapFromGlobal(QPoint(x, y))
-        w, h = self.width(), self.height()
-        if not (0 <= pos.x() < w and 0 <= pos.y() < h):
-            return None                                 # outside — default handling
-
-        # When docked, Qt handles drag-to-undock via TitleBar/CompactBar
-        if self._docked:
-            return HTCLIENT
-
-        # Resize edges (6 px border)
-        B = 6
-        at_l, at_r = pos.x() < B, pos.x() >= w - B
-        at_t, at_b = pos.y() < B, pos.y() >= h - B
-        if at_t and at_l: return HTTOPLEFT
-        if at_t and at_r: return HTTOPRIGHT
-        if at_b and at_l: return HTBOTTOMLEFT
-        if at_b and at_r: return HTBOTTOMRIGHT
-        if at_l: return HTLEFT
-        if at_r: return HTRIGHT
-        if at_t: return HTTOP
-        if at_b: return HTBOTTOM
-
-        # Caption area — title bar in normal mode, whole window in compact
-        compact = self._settings.get("compact", False)
-        caption_h = h if compact else 62                # TitleBar is 52px + 10px top margin
-        if pos.y() < caption_h:
-            child = self.childAt(pos)
-            # TitleBar/CompactBar themselves, or labels with
-            # WA_TransparentForMouseEvents → caption (draggable).
-            # Interactive buttons → client (clickable).
-            if (child is None
-                    or child is self._title_bar
-                    or child is self._compact_bar
-                    or child.testAttribute(
-                        Qt.WidgetAttribute.WA_TransparentForMouseEvents)):
-                return HTCAPTION
-            return HTCLIENT
-
-        return HTCLIENT
-
-    def _show_caption_context_menu(self):
-        from PyQt6.QtGui import QCursor, QContextMenuEvent
-        compact = self._settings.get("compact", False)
-        target = self._compact_bar if compact else self._title_bar
-        gpos = QCursor.pos()
-        lpos = target.mapFromGlobal(gpos)
-        evt = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, lpos, gpos)
-        target.contextMenuEvent(evt)
 
     def _apply_state(self, d, first_show=True):
         docked = d.get("docked", False)
@@ -1102,6 +1115,11 @@ def main():
         s["pawnio_prompt_shown"] = True
         _save_settings(s)
         win._settings = s
+
+    # Install Snap Layout filter after window is fully constructed
+    if IS_WINDOWS and _SnapFilter is not None:
+        win._snap_filter = _SnapFilter(win)
+        app.installNativeEventFilter(win._snap_filter)
 
     win.show()
     sys.exit(app.exec())
