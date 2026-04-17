@@ -1068,45 +1068,37 @@ def main():
         win._settings = s
 
     # On Windows, PawnIO is needed to read CPU temp MSRs on systems with
-    # Memory Integrity / Core Isolation enabled. Offer to install it once
-    # if we detect it's missing.
+    # Memory Integrity / Core Isolation enabled.  Install it automatically
+    # on first run if it's missing.
     if IS_WINDOWS and not s.get("pawnio_prompt_shown", False):
         from . import lhm
         if not lhm.pawnio_installed():
             from PyQt6.QtWidgets import QMessageBox
-            reply = QMessageBox.question(
-                win,
-                "HeatSync — Install sensor driver?",
-                "HeatSync can read CPU temperature through the PawnIO "
-                "sensor driver — a small, Microsoft-signed kernel driver.\n\n"
-                "Without it, CPU temperatures may show 0 on Windows 11 "
-                "systems that have Memory Integrity enabled.\n\n"
-                "Install PawnIO now via winget?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                try:
-                    subprocess.Popen(
-                        ["winget", "install", "--id", "namazso.PawnIO",
-                         "--silent", "--accept-source-agreements",
-                         "--accept-package-agreements"],
-                        creationflags=0x08000000,
-                    )
-                    QMessageBox.information(
-                        win,
-                        "HeatSync",
-                        "PawnIO installation started in the background. "
-                        "Restart HeatSync after it completes for CPU temps "
-                        "to populate.",
-                    )
-                except Exception as e:
-                    QMessageBox.warning(
-                        win,
-                        "HeatSync",
-                        f"Couldn't launch winget: {e}\n\n"
-                        "Install manually: winget install namazso.PawnIO",
-                    )
+            try:
+                subprocess.Popen(
+                    ["winget", "install", "--id", "namazso.PawnIO",
+                     "--silent", "--accept-source-agreements",
+                     "--accept-package-agreements"],
+                    creationflags=0x08000000,
+                )
+                QMessageBox.information(
+                    win,
+                    "HeatSync — Installing sensor driver",
+                    "HeatSync requires the PawnIO sensor driver to read "
+                    "CPU temperatures — a small, Microsoft-signed kernel "
+                    "driver.\n\n"
+                    "Installation has started in the background via winget. "
+                    "Restart HeatSync after it completes for CPU temps "
+                    "to populate.",
+                )
+            except Exception as e:
+                QMessageBox.warning(
+                    win,
+                    "HeatSync — Sensor driver required",
+                    f"Couldn't launch winget: {e}\n\n"
+                    "Please install manually:\n"
+                    "  winget install namazso.PawnIO",
+                )
         s["pawnio_prompt_shown"] = True
         _save_settings(s)
         win._settings = s
