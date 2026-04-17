@@ -90,13 +90,22 @@ if IS_WINDOWS:
     def _enable_snap_styles(hwnd):
         """Add WS_THICKFRAME | WS_CAPTION so Windows Snap treats this
         frameless window as a snap-eligible resizable window."""
-        GWL_STYLE = -16
+        GWL_STYLE     = -16
         WS_THICKFRAME = 0x00040000
         WS_CAPTION    = 0x00C00000
+        SWP_FRAMECHANGED  = 0x0020
+        SWP_NOMOVE        = 0x0002
+        SWP_NOSIZE        = 0x0001
+        SWP_NOZORDER      = 0x0004
+        SWP_NOACTIVATE    = 0x0010
         user32 = ctypes.windll.user32
         style = user32.GetWindowLongW(hwnd, GWL_STYLE)
         user32.SetWindowLongW(hwnd, GWL_STYLE,
                               style | WS_THICKFRAME | WS_CAPTION)
+        # Force Windows to re-read the style flags
+        user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0,
+                            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE |
+                            SWP_NOZORDER | SWP_NOACTIVATE)
 
     class _SnapFilter(QAbstractNativeEventFilter):
         """Handle WM_NCHITTEST + WM_NCCALCSIZE so Windows Snap Layouts
