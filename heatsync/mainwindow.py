@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QFrame, QSizePolicy,
     QGraphicsOpacityEffect, QSystemTrayIcon, QMenu, QDialog,
 )
-from PyQt6.QtCore import Qt, QTimer, QRect, QRectF, QLoggingCategory, QPoint
+from PyQt6.QtCore import Qt, QTimer, QRect, QRectF, QLoggingCategory, QPoint, QFileSystemWatcher
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush
 
 from .constants import (
@@ -205,10 +205,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("HeatSync")
 
-        # Qt.Tool on Windows hides the taskbar entry, which makes minimize
-        # vanish the window entirely — users could only recover from the
-        # tray. Use a normal frameless window so minimize goes to taskbar.
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        # Qt.Tool hides the taskbar entry — HeatSync lives in the system
+        # tray instead. Minimize is intercepted in changeEvent() below and
+        # redirected to hide-to-tray so the window doesn't vanish with no
+        # way back. Recovery: click the tray icon or use its menu.
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(880, 520)
         self.resize(1080, 540)
@@ -355,6 +356,17 @@ class MainWindow(QMainWindow):
         qapp.primaryScreenChanged.connect(self._on_screens_changed)
         qapp.focusWindowChanged.connect(self._on_focus_window_changed)
         self._reconnect_screen_signals()
+
+        # External settings-file watcher: lets outside tools (e.g. SnapBack)
+        # modify .heatsync.json and have HeatSync re-apply dock/position
+        # without restarting. Debounce because writers can fire multiple
+        # fileChanged events or emit mid-write partial content.
+        self._settings_reload_timer = QTimer(self)
+        self._settings_reload_timer.setSingleShot(True)
+        self._settings_reload_timer.setInterval(250)
+        self._settings_reload_timer.timeout.connect(self._reload_settings_from_disk)
+        self._settings_watcher = QFileSystemWatcher([_SETTINGS_FILE], self)
+        self._settings_watcher.fileChanged.connect(self._on_settings_file_changed)
 
         # Auto-follow system theme
         try:
@@ -850,6 +862,21 @@ class MainWindow(QMainWindow):
         else:
             self._save_pos(); e.accept()
 
+    def changeEvent(self, e):
+        # Qt.Tool windows have no taskbar entry, so a real minimize would
+        # make the window disappear with no way back except the tray. Turn
+        # minimize into hide-to-tray so the tray icon is the canonical
+        # recovery path.
+        from PyQt6.QtCore import QEvent
+        if (e.type() == QEvent.Type.WindowStateChange
+                and self.windowState() & Qt.WindowState.WindowMinimized
+                and self._tray and self._tray.isVisible()):
+            # Re-show normal state before hiding so next show() doesn't
+            # restore as minimized.
+            self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized)
+            QTimer.singleShot(0, self.hide)
+        super().changeEvent(e)
+
     def _toggle_visibility(self):
         if self.isVisible():
             self._save_pos(); self.hide()
@@ -1016,6 +1043,117 @@ class MainWindow(QMainWindow):
         if self._docked and win is not None:
             self._schedule_reapply_dock()
 
+    # ── External settings-file reload ──────────────────────────────────────
+    def _on_settings_file_changed(self, _path):
+        # Atomic replace (editors, SnapBack pre-seed) can drop the watch.
+        if _SETTINGS_FILE not in self._settings_watcher.files():
+            self._settings_watcher.addPath(_SETTINGS_FILE)
+        self._settings_reload_timer.start()
+
+    def _snap_dock_to(self, x, y):
+        """Simulate 'drag to target screen, click Dock'. Used by external
+        triggers (SnapBack-style pre-seed) to re-dock via HeatSync's native
+        path — same sizing as a manual drag + click.
+
+        Note: the starting-from-docked-elsewhere case isn't perfectly
+        reliable — the native re-pin timer sometimes fights the move. The
+        reliable flow is: caller ensures window is undocked first (or
+        starts from an undocked state)."""
+        if self._docked:
+            self.toggle_dock(via_drag=True)
+        if IS_WINDOWS:
+            SWP_NOZORDER   = 0x0004
+            SWP_NOACTIVATE = 0x0010
+            ctypes.windll.user32.SetWindowPos(
+                int(self.winId()), 0,
+                int(x), int(y),
+                self.width(), self.height(),
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            )
+        else:
+            self.move(int(x), int(y))
+        QApplication.processEvents()
+        if not self._docked:
+            self.toggle_dock()
+
+    def _reload_settings_from_disk(self):
+        # Raw-read the file so we can tell "key missing" (writer didn't
+        # touch it) from "key is False" (writer intentionally cleared).
+        # _load_settings() merges defaults which masks missing keys as
+        # None, and a mid-write read returns {} — interpreting that as
+        # "undock" used to blow away live dock state.
+        import json as _json
+        import time as _time
+        raw = None
+        for _ in range(4):
+            try:
+                with open(_SETTINGS_FILE) as _f:
+                    raw = _json.load(_f)
+                break
+            except (ValueError, OSError):
+                _time.sleep(0.05)
+        if not raw or "docked" not in raw:
+            return  # mid-write or writer didn't touch dock state — bail
+        d = _load_settings()  # merged view for non-dock settings
+
+        # Use raw (not the defaults-merged d) for dock decisions. Compare the
+        # file against the *live* dock state (self._docked + self._dock_info),
+        # not self._settings — toggle_dock mutates live state without writing
+        # to self._settings, so trusting self._settings would miss "user just
+        # docked elsewhere" and leave the window bouncing back to stale dock.
+        current_info = self._dock_info or {}
+        file_docked = bool(raw.get("docked"))
+        file_dx = raw.get("dock_x")
+        file_dy = raw.get("dock_y")
+        file_dw = raw.get("dock_w")
+
+        dock_changed = (
+            file_docked != bool(self._docked)
+            or (file_docked and (
+                file_dx != current_info.get("dock_x")
+                or file_dy != current_info.get("dock_y")
+                or file_dw != current_info.get("dock_w")
+            ))
+        )
+
+        pos_changed = False
+        if not file_docked:
+            fx, fy = raw.get("x"), raw.get("y")
+            fw, fh = raw.get("w"), raw.get("h")
+            if None not in (fx, fy, fw, fh):
+                g = self.geometry()
+                if (fx, fy, fw, fh) != (g.x(), g.y(), g.width(), g.height()):
+                    pos_changed = True
+
+        if not dock_changed and not pos_changed:
+            self._settings = d
+            return
+
+        old_docked = bool(self._docked)
+        self._settings = d
+
+        if file_docked and file_dx is not None:
+            self._snap_dock_to(int(file_dx), int(file_dy))
+            return
+
+        # External write cleared the dock flag → undock and restore size.
+        if old_docked:
+            pre_w = d.get("pre_dock_w") or 1080
+            pre_h = d.get("pre_dock_h") or 540
+            self._docked = False
+            self._dock_info = None
+            try:
+                self._title_bar.dock_btn.set_active(False)
+            except AttributeError:
+                pass
+            if not IS_WAYLAND:
+                self.resize(pre_w, pre_h)
+
+        fx, fy, fw, fh = d.get("x"), d.get("y"), d.get("w"), d.get("h")
+        if None not in (fx, fy, fw, fh) and not IS_WAYLAND:
+            self.resize(fw, fh)
+            self.move(fx, fy)
+
     # ── Dock toggle ────────────────────────────────────────────────────────
     def toggle_dock(self, via_drag: bool = False):
         cw      = self.centralWidget()
@@ -1086,6 +1224,20 @@ def _acquire_instance_lock() -> bool:
 def main():
     if not _acquire_instance_lock():
         sys.exit(0)
+
+    if IS_WINDOWS:
+        # PER_MONITOR_AWARE_V2 — without this, Qt's QScreen.availableGeometry()
+        # returns DPI-scaled logical pixels for secondary monitors (e.g. 1080
+        # for a 1440px screen at 133%), which breaks dock sizing across
+        # mismatched-DPI monitors. Must be called before QApplication is
+        # constructed.
+        try:
+            ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        except (AttributeError, OSError):
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except (AttributeError, OSError):
+                pass
 
     app = QApplication(sys.argv)
     app.setApplicationName("HeatSync")
