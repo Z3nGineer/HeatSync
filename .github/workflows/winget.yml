@@ -5,12 +5,11 @@ name: 📦 Submit to winget
 # a GitHub PAT with `public_repo` scope (used to fork winget-pkgs and
 # open the PR).
 #
-# FIRST RELEASE: winget-releaser updates an existing manifest, it does
-# not create the initial one. Before this workflow can run, the initial
-# Z3nGineer.HeatSync manifest must be submitted manually once via
-# `wingetcreate new` — that's where the `Moniker: heatsync` field is set
-# so users can run `winget install heatsync`. Subsequent releases are
-# automatic.
+# DISABLED until the Z3nGineer.HeatSync manifest is officially registered
+# in microsoft/winget-pkgs. To enable: (1) submit the initial manifest
+# manually via `wingetcreate new` with `Moniker: heatsync` set, (2) wait
+# for Microsoft to merge it, (3) update `identifier:` below to
+# Z3nGineer.HeatSync, (4) remove the `if: false` guard on the job.
 
 on:
   release:
@@ -19,11 +18,12 @@ on:
 
 jobs:
   publish:
+    if: false  # re-enable after Z3nGineer.HeatSync is registered in winget-pkgs
     runs-on: ubuntu-latest
     steps:
       - name: Submit to winget-pkgs
         uses: vedantmgoyal2009/winget-releaser@v2
         with:
-          identifier: Z3nGineer.HeatSync
+          identifier: VibeSmiths.HeatSync
           installers-regex: '^HeatSync\.exe$'
           token: ${{ secrets.WINGET_TOKEN }}
