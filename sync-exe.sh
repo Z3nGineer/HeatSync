@@ -14,7 +14,7 @@ TAG="v${VERSION}"
 echo "[sync-exe] Waiting for CI to finish building ${TAG}..."
 
 # Poll the latest Build workflow run until it completes (up to 15 min)
-for i in $(seq 1 90); do
+for _ in $(seq 1 90); do
     STATUS=$(gh api "repos/$REPO/actions/runs?per_page=1&branch=main" \
         --jq '.workflow_runs[] | select(.name | contains("Build")) | .status' 2>/dev/null || echo "unknown")
     if [ "$STATUS" = "completed" ]; then
@@ -30,7 +30,7 @@ fi
 
 # Wait for the release to appear
 echo "[sync-exe] Waiting for release ${TAG}..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
     if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
         break
     fi

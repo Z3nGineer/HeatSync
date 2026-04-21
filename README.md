@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD033 MD041 -->
 <p align="center">
   <img src="assets/icon.png" width="128" alt="HeatSync Logo">
 </p>
@@ -11,7 +12,6 @@
 <p align="center">
   <img src="https://img.shields.io/github/v/release/Z3nGineer/HeatSync?style=for-the-badge&label=version&color=cyan" alt="Latest version">
   <a href="https://github.com/Z3nGineer/HeatSync/releases/latest"><img src="https://img.shields.io/badge/download-latest-blue?style=for-the-badge" alt="Download"></a>
-  <a href="https://aur.archlinux.org/packages/heatsync-bin"><img src="https://img.shields.io/badge/AUR-heatsync--bin-1793d1?style=for-the-badge&logo=archlinux&logoColor=white" alt="AUR"></a>
   <a href="https://winget.run/pkg/Z3nGineer/HeatSync"><img src="https://img.shields.io/badge/winget-Z3nGineer.HeatSync-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="winget"></a>
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License">
 </p>
@@ -31,7 +31,6 @@
 | Platform | Download | |
 |---|---|---|
 | **Linux** | [HeatSync.AppImage](https://github.com/Z3nGineer/HeatSync/releases/latest/download/HeatSync.AppImage) | Works on any distro |
-| **Linux (Arch)** | `paru -S heatsync-bin` | AUR package |
 | **Windows** | `winget install Z3nGineer.HeatSync` | Recommended — handles trust automatically |
 | **Windows (manual)** | [HeatSync.exe](https://github.com/Z3nGineer/HeatSync/releases/latest/download/HeatSync.exe) | Standalone — UAC prompt on launch |
 
@@ -127,12 +126,6 @@ chmod +x HeatSync.AppImage
 ./HeatSync.AppImage
 ```
 
-**Arch Linux / AUR:**
-
-```bash
-paru -S heatsync-bin
-```
-
 **From source:**
 
 ```bash
@@ -147,7 +140,7 @@ bash install.sh
 
 The easiest path is winget:
 
-```
+```powershell
 winget install Z3nGineer.HeatSync
 ```
 
@@ -161,7 +154,7 @@ Either way, on first launch you'll see a UAC prompt — click Yes (admin is requ
 
 If you want to hack on HeatSync rather than just run it:
 
-```
+```powershell
 git clone https://github.com/Z3nGineer/HeatSync.git
 cd HeatSync
 install.bat
