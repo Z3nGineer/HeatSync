@@ -4,6 +4,13 @@ name: 📦 Submit to winget
 # GitHub Release is published. Requires a WINGET_TOKEN repo secret —
 # a GitHub PAT with `public_repo` scope (used to fork winget-pkgs and
 # open the PR).
+#
+# FIRST RELEASE: winget-releaser updates an existing manifest, it does
+# not create the initial one. Before this workflow can run, the initial
+# Z3nGineer.HeatSync manifest must be submitted manually once via
+# `wingetcreate new` — that's where the `Moniker: heatsync` field is set
+# so users can run `winget install heatsync`. Subsequent releases are
+# automatic.
 
 on:
   release:
@@ -17,6 +24,6 @@ jobs:
       - name: Submit to winget-pkgs
         uses: vedantmgoyal2009/winget-releaser@v2
         with:
-          identifier: VibeSmiths.HeatSync
+          identifier: Z3nGineer.HeatSync
           installers-regex: '^HeatSync\.exe$'
           token: ${{ secrets.WINGET_TOKEN }}
