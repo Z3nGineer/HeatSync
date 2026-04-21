@@ -45,8 +45,7 @@ ARCH=x86_64 ./linuxdeploy-x86_64.AppImage \
     | grep -E "^\[(appimage|linuxdeploy)\]|ERROR|Success" || true
 
 # linuxdeploy names output HeatSync-x86_64.AppImage — normalize it
-BUILT=$(ls -t HeatSync-x86_64.AppImage 2>/dev/null | head -1)
-[ -n "$BUILT" ] && mv -f "$BUILT" HeatSync.AppImage
+[ -f HeatSync-x86_64.AppImage ] && mv -f HeatSync-x86_64.AppImage HeatSync.AppImage
 
 chmod +x HeatSync.AppImage
 echo ""
