@@ -1,11 +1,11 @@
-# Maintainer: VibeSmiths <vibesmiths@users.noreply.gitlab.com>
+# Maintainer: Z3nGineer <z3ngineer@users.noreply.github.com>
 
 pkgname=heatsync-bin
 pkgver=1.0.78
 pkgrel=1
 pkgdesc="Real-time system monitor with animated gauges, sparkline graphs, 10 themes, compact mode, alerts, and data export. Supports NVIDIA, AMD, and Intel GPUs."
 arch=('x86_64')
-url="https://gitlab.com/vibesmiths/HeatSync"
+url="https://github.com/Z3nGineer/HeatSync"
 license=('MIT')
 depends=('fuse2')
 optdepends=(
@@ -19,8 +19,8 @@ conflicts=('heatsync')
 options=('!strip')
 
 source=(
-    "HeatSync-${pkgver}.AppImage::https://gitlab.com/vibesmiths/HeatSync/-/releases/v${pkgver}/downloads/HeatSync.AppImage"
-    "icon.png::https://gitlab.com/vibesmiths/HeatSync/-/raw/main/assets/icon.png"
+    "HeatSync-${pkgver}.AppImage::https://github.com/Z3nGineer/HeatSync/releases/download/v${pkgver}/HeatSync.AppImage"
+    "icon.png::https://raw.githubusercontent.com/Z3nGineer/HeatSync/main/assets/icon.png"
 )
 sha256sums=(
     'SKIP'
@@ -55,7 +55,7 @@ EOF
     install -Dm644 /dev/stdin "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" << 'EOF'
 MIT License
 
-Copyright (c) 2025-2026 VibeSmiths
+Copyright (c) 2025-2026 Z3nGineer
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

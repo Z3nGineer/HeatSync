@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/v/release/VibeSmiths/HeatSync?style=for-the-badge&label=version&color=cyan" alt="Latest version">
-  <a href="https://github.com/VibeSmiths/HeatSync/releases/latest"><img src="https://img.shields.io/badge/download-latest-blue?style=for-the-badge" alt="Download"></a>
+  <img src="https://img.shields.io/github/v/release/Z3nGineer/HeatSync?style=for-the-badge&label=version&color=cyan" alt="Latest version">
+  <a href="https://github.com/Z3nGineer/HeatSync/releases/latest"><img src="https://img.shields.io/badge/download-latest-blue?style=for-the-badge" alt="Download"></a>
   <a href="https://aur.archlinux.org/packages/heatsync-bin"><img src="https://img.shields.io/badge/AUR-heatsync--bin-1793d1?style=for-the-badge&logo=archlinux&logoColor=white" alt="AUR"></a>
-  <a href="https://winget.run/pkg/VibeSmiths/HeatSync"><img src="https://img.shields.io/badge/winget-VibeSmiths.HeatSync-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="winget"></a>
+  <a href="https://winget.run/pkg/Z3nGineer/HeatSync"><img src="https://img.shields.io/badge/winget-Z3nGineer.HeatSync-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="winget"></a>
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License">
 </p>
 
@@ -30,10 +30,10 @@
 
 | Platform | Download | |
 |---|---|---|
-| **Linux** | [HeatSync.AppImage](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.AppImage) | Works on any distro |
+| **Linux** | [HeatSync.AppImage](https://github.com/Z3nGineer/HeatSync/releases/latest/download/HeatSync.AppImage) | Works on any distro |
 | **Linux (Arch)** | `paru -S heatsync-bin` | AUR package |
-| **Windows** | `winget install VibeSmiths.HeatSync` | Recommended — handles trust automatically |
-| **Windows (manual)** | [HeatSync.exe](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.exe) | Standalone — UAC prompt on launch |
+| **Windows** | `winget install Z3nGineer.HeatSync` | Recommended — handles trust automatically |
+| **Windows (manual)** | [HeatSync.exe](https://github.com/Z3nGineer/HeatSync/releases/latest/download/HeatSync.exe) | Standalone — UAC prompt on launch |
 
 ---
 
@@ -136,7 +136,7 @@ paru -S heatsync-bin
 **From source:**
 
 ```bash
-git clone https://gitlab.com/vibesmiths/HeatSync.git
+git clone https://github.com/Z3nGineer/HeatSync.git
 cd HeatSync
 bash install.sh
 ```
@@ -148,12 +148,12 @@ bash install.sh
 The easiest path is winget:
 
 ```
-winget install VibeSmiths.HeatSync
+winget install Z3nGineer.HeatSync
 ```
 
 This downloads, verifies, and registers the `heatsync` command. Launch from Start Menu or by typing `heatsync` in any terminal.
 
-If you'd rather download manually: grab [`HeatSync.exe`](https://github.com/VibeSmiths/HeatSync/releases/latest/download/HeatSync.exe) and double-click it. With manual download Windows may show a SmartScreen warning ("Windows protected your PC") — click **More info → Run anyway**. If you see a hard block from Smart App Control, right-click the .exe → Properties → check **Unblock**, then try again.
+If you'd rather download manually: grab [`HeatSync.exe`](https://github.com/Z3nGineer/HeatSync/releases/latest/download/HeatSync.exe) and double-click it. With manual download Windows may show a SmartScreen warning ("Windows protected your PC") — click **More info → Run anyway**. If you see a hard block from Smart App Control, right-click the .exe → Properties → check **Unblock**, then try again.
 
 Either way, on first launch you'll see a UAC prompt — click Yes (admin is required to read CPU temperature MSRs). The .exe then creates desktop and Start Menu shortcuts and a logon Task Scheduler entry for autostart. LibreHardwareMonitor is bundled inside the .exe — no separate install needed.
 
@@ -162,7 +162,7 @@ Either way, on first launch you'll see a UAC prompt — click Yes (admin is requ
 If you want to hack on HeatSync rather than just run it:
 
 ```
-git clone https://github.com/VibeSmiths/HeatSync.git
+git clone https://github.com/Z3nGineer/HeatSync.git
 cd HeatSync
 install.bat
 run.bat
